@@ -66,12 +66,17 @@ def _peer_features(
     rolling = candidate.rolling(
         rolling_window, min_periods=rolling_window // 2
     ).corr(diff_center)
+    valid_rolling = rolling.dropna()
     return {
         "raw_corr": safe_corr(candidate, center),
         "residual_corr": safe_corr(residual, residual_center),
         "diff_corr": safe_corr(diff, diff_center),
-        "rolling_corr_median": float(rolling.median()),
-        "rolling_corr_q10": float(rolling.quantile(0.1)),
+        "rolling_corr_median": float(valid_rolling.median())
+        if len(valid_rolling)
+        else float("nan"),
+        "rolling_corr_q10": float(valid_rolling.quantile(0.1))
+        if len(valid_rolling)
+        else float("nan"),
         "event_match": _jaccard(
             _event_mask(candidate, event_quantile),
             _event_mask(center, event_quantile),
