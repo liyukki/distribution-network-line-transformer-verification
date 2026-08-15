@@ -642,7 +642,7 @@ git commit -m "feat: generate isolated truth and corrupted observations"
 - Consumes: observed long-form transformer measurements.
 - Produces: `PreparedMeasurements`, `prepare_measurements(frame, interval_minutes, interpolation_limit, minimum_coverage)`.
 
-- [ ] **Step 1: Write failing interpolation and leakage tests**
+- [x] **Step 1: Write failing interpolation and leakage tests**
 
 ```python
 def test_preprocessing_interpolates_short_gap_and_retains_long_gap() -> None:
@@ -659,11 +659,11 @@ def test_preprocessing_interpolates_short_gap_and_retains_long_gap() -> None:
     assert "physical_feeder_id" not in prepared.long_form.columns
 ```
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_preprocessing.py -v`
 
-- [ ] **Step 3: Implement the prepared-data container**
+- [x] **Step 3: Implement the prepared-data container**
 
 ```python
 @dataclass(frozen=True)
@@ -677,15 +677,15 @@ class PreparedMeasurements:
     coverage: pd.Series
 ```
 
-- [ ] **Step 4: Implement validation, alignment, interpolation, and residuals**
+- [x] **Step 4: Implement validation, alignment, interpolation, and residuals**
 
 Reject duplicate `(timestamp, transformer_id)` pairs. Pivot P, Q and voltage to wide form, reindex to the complete date range, and run `interpolate(method="time", limit=interpolation_limit, limit_area="inside")`. Compute coverage before interpolation and exclude devices below `minimum_coverage` from automatic diagnosis. Compute common mode as the row median of voltage and subtract it from every column. Compute first differences after interpolation.
 
-- [ ] **Step 5: Add duplicate and low-coverage tests**
+- [x] **Step 5: Add duplicate and low-coverage tests**
 
 Assert duplicates raise `DataContractError("duplicate timestamp-transformer pairs")`. Assert a device below coverage remains in exported data but its coverage value is below threshold, enabling downstream refusal rather than silent deletion.
 
-- [ ] **Step 6: Run tests and commit**
+- [x] **Step 6: Run tests and commit**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/unit/test_preprocessing.py -v
