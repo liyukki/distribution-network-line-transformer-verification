@@ -35,6 +35,8 @@ _CORRELATION_FEATURES = (
     "active_power_corr",
 )
 
+_ALL_FEATURE_NAMES = _CORRELATION_FEATURES + ("event_match",)
+
 PREDICTION_COLUMNS = [
     "transformer_id",
     "reported_feeder_id",
@@ -68,15 +70,31 @@ def score_candidates(features: pd.DataFrame, weights: ScoreWeights) -> pd.DataFr
             weight_sum += weight_map["event_match"]
         return total / weight_sum if weight_sum > 0 else float("nan")
 
+    def evidence_for_row(row: pd.Series) -> float:
+        available = 0.0
+        total_weight = 0.0
+        for name in _ALL_FEATURE_NAMES:
+            total_weight += weight_map[name]
+            if pd.notna(row[name]):
+                available += weight_map[name]
+        return available / total_weight if total_weight > 0 else 0.0
+
     scored["baseline_score"] = scored["raw_corr"]
     scored["enhanced_score"] = scored.apply(enhanced_for_row, axis=1)
+    scored["available_feature_weight"] = scored.apply(evidence_for_row, axis=1)
     return scored
 
 
 def diagnose(
     scored: pd.DataFrame, ledger: pd.DataFrame, cfg: ScoringConfig
 ) -> pd.DataFrame:
-    """Decide per transformer whether the reported feeder is wrong."""
+    """Decide per transformer whether the reported feeder is wrong.
+
+    Every key evidence value (coverage, current score, best score, margin,
+    evidence weight) must be finite and above its configured gate before a
+    decision other than insufficient_data is allowed. The margin is computed
+    whenever both scores are finite, independent of the final decision.
+    """
     rows: list[dict[str, object]] = []
     for transformer_id, group in scored.groupby("transformer_id", sort=True):
         reported = ledger.loc[
@@ -88,40 +106,62 @@ def diagnose(
             if len(current_rows)
             else float("nan")
         )
+        if "available_feature_weight" in scored.columns and len(current_rows):
+            current_weight = float(
+                current_rows["available_feature_weight"].iloc[0]
+            )
+        else:
+            current_weight = 1.0
         others = group[group["candidate_feeder_id"] != reported]
         coverage = float(group["coverage"].iloc[0])
         best_score = float("nan")
         recommended: object = reported
         valid_others = others.dropna(subset=["enhanced_score"])
+        if "available_feature_weight" in scored.columns:
+            valid_others = valid_others[
+                valid_others["available_feature_weight"]
+                >= cfg.evidence_weight_threshold
+            ]
         if len(valid_others):
             best_index = valid_others["enhanced_score"].idxmax()
             best_score = float(valid_others.loc[best_index, "enhanced_score"])
             best_candidate = valid_others.loc[best_index, "candidate_feeder_id"]
 
+        margin = (
+            best_score - current_score
+            if pd.notna(best_score) and pd.notna(current_score)
+            else float("nan")
+        )
+        evidence_complete = (
+            pd.notna(coverage)
+            and coverage >= cfg.minimum_coverage
+            and pd.notna(current_score)
+            and pd.notna(best_score)
+            and pd.notna(margin)
+            and pd.notna(current_weight)
+            and current_weight >= cfg.evidence_weight_threshold
+        )
+
         decision = "no_change"
         predicted = False
         confidence = 0.0
-        margin = float("nan")
-        if coverage < cfg.minimum_coverage:
+        if not evidence_complete:
             decision = "insufficient_data"
         elif (
-            pd.notna(current_score)
-            and pd.notna(best_score)
-            and current_score < cfg.current_score_threshold
+            current_score < cfg.current_score_threshold
+            and margin > cfg.margin_threshold
         ):
-            margin = best_score - current_score
-            if margin > cfg.margin_threshold:
-                decision = "automatic_recommendation"
-                predicted = True
-                recommended = best_candidate
-                confidence = coverage * float(
-                    np.clip(
-                        (margin - cfg.margin_threshold)
-                        / (1.0 - cfg.margin_threshold),
-                        0.0,
-                        1.0,
-                    )
+            decision = "automatic_recommendation"
+            predicted = True
+            recommended = best_candidate
+            confidence = coverage * float(
+                np.clip(
+                    (margin - cfg.margin_threshold)
+                    / (1.0 - cfg.margin_threshold),
+                    0.0,
+                    1.0,
                 )
+            )
 
         rows.append(
             {

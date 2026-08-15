@@ -127,10 +127,13 @@ def test_legal_feeder_without_ledger_members_stays_in_features() -> None:
     assert np.isfinite(f02_rows["active_power_corr"].iloc[0])
 
 
-def test_features_include_evidence_weight() -> None:
+def test_scored_candidates_include_evidence_weight() -> None:
+    from ltverify.scoring import ScoreWeights, score_candidates
+
     prepared, ledger, feeder_measurements = candidate_feature_fixture()
     features = build_candidate_features(
         prepared, ledger, feeder_measurements, rolling_window=24, event_quantile=0.90
     )
-    assert "available_feature_weight" in features.columns
-    assert features["available_feature_weight"].between(0.0, 1.0).all()
+    scored = score_candidates(features, ScoreWeights())
+    assert "available_feature_weight" in scored.columns
+    assert scored["available_feature_weight"].between(0.0, 1.0).all()

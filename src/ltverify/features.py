@@ -1,13 +1,16 @@
 """Candidate feeder feature engineering.
 
 Builds one row per transformer-candidate-feeder pair with explainable
-similarity features. Peer centers always exclude the candidate transformer
-itself, and the physical truth is never read or aggregated here.
+similarity features. The legal candidate set comes from the feeder
+measurements; the reported ledger only defines peer groups. Peer centers
+always exclude the candidate transformer itself, and the physical truth is
+never read or aggregated here.
 """
 
 import numpy as np
 import pandas as pd
 
+from ltverify.contracts import DataContractError
 from ltverify.preprocessing import PreparedMeasurements
 
 FEATURE_COLUMNS = [
@@ -62,15 +65,18 @@ def _peer_features(
     diff_center: pd.Series,
     rolling_window: int,
     event_quantile: float,
+    minimum_pairs: int,
 ) -> dict[str, float]:
     rolling = candidate.rolling(
         rolling_window, min_periods=rolling_window // 2
     ).corr(diff_center)
     valid_rolling = rolling.dropna()
     return {
-        "raw_corr": safe_corr(candidate, center),
-        "residual_corr": safe_corr(residual, residual_center),
-        "diff_corr": safe_corr(diff, diff_center),
+        "raw_corr": safe_corr(candidate, center, minimum_pairs=minimum_pairs),
+        "residual_corr": safe_corr(
+            residual, residual_center, minimum_pairs=minimum_pairs
+        ),
+        "diff_corr": safe_corr(diff, diff_center, minimum_pairs=minimum_pairs),
         "rolling_corr_median": float(valid_rolling.median())
         if len(valid_rolling)
         else float("nan"),
@@ -90,16 +96,35 @@ def build_candidate_features(
     feeder_measurements: pd.DataFrame,
     rolling_window: int,
     event_quantile: float,
+    minimum_pairs: int = 16,
 ) -> pd.DataFrame:
-    """Return one feature row per transformer-candidate-feeder pair."""
+    """Return one feature row per transformer-candidate-feeder pair.
+
+    Candidate feeders are the legal feeders present in feeder_measurements;
+    a corrupted ledger can therefore never remove a legal feeder from the
+    candidate set. Voltage shape features require at least two ledger peers,
+    while active_power_corr is computed whenever a legal feeder measurement
+    exists.
+    """
+    duplicated = feeder_measurements.duplicated(
+        subset=["timestamp", "feeder_id"], keep=False
+    )
+    if duplicated.any():
+        examples = feeder_measurements.loc[
+            duplicated, ["timestamp", "feeder_id"]
+        ].head(3).to_dict("records")
+        raise DataContractError(f"duplicate timestamp-feeder pairs: {examples}")
+
     voltage = prepared.voltage_wide
     residual = prepared.residual_voltage_wide
     diff = prepared.voltage_diff_wide
     p_wide = prepared.p_wide
-    feeder_p = feeder_measurements.pivot(
-        index="timestamp", columns="feeder_id", values="p_mw"
+    feeder_p = feeder_measurements.pivot_table(
+        index="timestamp", columns="feeder_id", values="p_mw", aggfunc="first"
     )
-    candidate_feeders = sorted(ledger["reported_feeder_id"].unique().tolist())
+    candidate_feeders = sorted(
+        feeder_measurements["feeder_id"].unique().tolist()
+    )
 
     rows: list[dict[str, object]] = []
     for transformer_id in ledger["transformer_id"]:
@@ -113,6 +138,14 @@ def build_candidate_features(
             ].tolist()
             peers = [member for member in members if member != transformer_id]
             peer_count = len(peers)
+            if candidate in feeder_p.columns:
+                active_power_corr = safe_corr(
+                    p_wide[transformer_id],
+                    feeder_p[candidate],
+                    minimum_pairs=minimum_pairs,
+                )
+            else:
+                active_power_corr = float("nan")
             if peer_count >= 2:
                 center = voltage[peers].median(axis=1)
                 residual_center = residual[peers].median(axis=1)
@@ -126,13 +159,8 @@ def build_candidate_features(
                     diff_center,
                     rolling_window,
                     event_quantile,
+                    minimum_pairs,
                 )
-                if candidate in feeder_p.columns:
-                    active_power_corr = safe_corr(
-                        p_wide[transformer_id], feeder_p[candidate]
-                    )
-                else:
-                    active_power_corr = float("nan")
             else:
                 computed = {
                     "raw_corr": float("nan"),
@@ -142,7 +170,6 @@ def build_candidate_features(
                     "rolling_corr_q10": float("nan"),
                     "event_match": float("nan"),
                 }
-                active_power_corr = float("nan")
             rows.append(
                 {
                     "transformer_id": transformer_id,

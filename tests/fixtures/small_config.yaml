@@ -25,4 +25,9 @@ scoring:
   current_score_threshold: 0.70
   margin_threshold: 0.08
   minimum_coverage: 0.80
+  minimum_pairs: 16
+  rolling_window: 24
+  event_quantile: 0.90
+  interpolation_limit: 2
+  evidence_weight_threshold: 0.5
 output_root: runs

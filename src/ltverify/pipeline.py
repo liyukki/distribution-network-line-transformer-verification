@@ -18,12 +18,8 @@ from ltverify.scoring import ScoreWeights, diagnose, score_candidates
 from ltverify.simulation import simulate_time_series
 from ltverify.validation import run_static_validation
 
-INTERPOLATION_LIMIT = 2
-ROLLING_WINDOW = 24
-EVENT_QUANTILE = 0.90
 
-
-def _run_directory(config_path: Path, config_sha256: str) -> Path:
+def _run_directory(config_sha256: str) -> Path:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
     return Path(
         f"run-{stamp}-{config_sha256[:8]}-{uuid.uuid4().hex[:6]}"
@@ -48,7 +44,7 @@ def run_pipeline(config_path: Path) -> Path:
     config_path = Path(config_path)
     config = load_config(config_path)
     config_sha256 = build_manifest(config_path, Path(".")).config_sha256
-    run_dir = config.output_root / _run_directory(config_path, config_sha256)
+    run_dir = config.output_root / _run_directory(config_sha256)
     run_dir.mkdir(parents=True, exist_ok=False)
 
     manifest = build_manifest(config_path, run_dir)
@@ -89,15 +85,16 @@ def run_pipeline(config_path: Path) -> Path:
         prepared = prepare_measurements(
             observed,
             config.profiles.interval_minutes,
-            INTERPOLATION_LIMIT,
+            config.scoring.interpolation_limit,
             config.scoring.minimum_coverage,
         )
         features = build_candidate_features(
             prepared,
             ledger,
             simulation.feeder_measurements,
-            ROLLING_WINDOW,
-            EVENT_QUANTILE,
+            config.scoring.rolling_window,
+            config.scoring.event_quantile,
+            config.scoring.minimum_pairs,
         )
         scored = score_candidates(features, ScoreWeights())
         predictions = diagnose(scored, ledger, config.scoring)

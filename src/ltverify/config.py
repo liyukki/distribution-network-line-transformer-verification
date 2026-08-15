@@ -47,6 +47,11 @@ class ScoringConfig(BaseModel):
     current_score_threshold: float = 0.70
     margin_threshold: float = 0.08
     minimum_coverage: float = 0.80
+    minimum_pairs: int = Field(default=16, ge=2)
+    rolling_window: int = Field(default=24, ge=4)
+    event_quantile: float = Field(default=0.90, gt=0.0, lt=1.0)
+    interpolation_limit: int = Field(default=2, ge=1)
+    evidence_weight_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
 class AppConfig(BaseModel):

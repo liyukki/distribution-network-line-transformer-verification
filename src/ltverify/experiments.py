@@ -18,7 +18,6 @@ from ltverify.corruption import build_truth, corrupt_ledger, disturb_measurement
 from ltverify.evaluation import evaluate_predictions
 from ltverify.features import build_candidate_features
 from ltverify.network import build_network
-from ltverify.pipeline import EVENT_QUANTILE, INTERPOLATION_LIMIT, ROLLING_WINDOW
 from ltverify.preprocessing import prepare_measurements
 from ltverify.profiles import generate_profiles
 from ltverify.scoring import ScoreWeights, diagnose, score_candidates
@@ -167,15 +166,16 @@ def _run_case(
     prepared = prepare_measurements(
         observed,
         config.profiles.interval_minutes,
-        INTERPOLATION_LIMIT,
+        config.scoring.interpolation_limit,
         config.scoring.minimum_coverage,
     )
     features = build_candidate_features(
         prepared,
         ledger,
         simulation.feeder_measurements,
-        ROLLING_WINDOW,
-        EVENT_QUANTILE,
+        config.scoring.rolling_window,
+        config.scoring.event_quantile,
+        config.scoring.minimum_pairs,
     )
     scored = score_candidates(features, _weights_for(case.enabled_features))
     predictions = diagnose(scored, ledger, config.scoring)
