@@ -441,7 +441,7 @@ git commit -m "feat: validate power-flow physical consistency"
 - Consumes: `NetworkArtifacts`, `ProfileConfig`, integer random seed.
 - Produces: `TimeSeriesProfiles`, `generate_profiles(artifacts, cfg, seed) -> TimeSeriesProfiles`.
 
-- [ ] **Step 1: Write failing shape, determinism, and physics tests**
+- [x] **Step 1: Write failing shape, determinism, and physics tests**
 
 ```python
 import numpy as np
@@ -465,11 +465,11 @@ def test_profiles_are_deterministic_and_have_physical_shapes() -> None:
     assert np.allclose(first.pv_p_mw.loc[night].to_numpy(), 0.0)
 ```
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_profiles.py -v`
 
-- [ ] **Step 3: Implement the profile container and time index**
+- [x] **Step 3: Implement the profile container and time index**
 
 ```python
 @dataclass(frozen=True)
@@ -482,7 +482,7 @@ class TimeSeriesProfiles:
 
 Build the left-closed date range with `periods = days * 24 * 60 // interval_minutes`. DataFrame columns must be transformer IDs in asset-table order.
 
-- [ ] **Step 4: Implement customer, feeder, and transformer variation**
+- [x] **Step 4: Implement customer, feeder, and transformer variation**
 
 Use two normalized daily peaks for residential loads, a daytime plateau for commercial loads, and their mean for mixed loads. Multiply by a weekday/weekend factor, a feeder sinusoid with phase `2π * feeder_number / 3`, a transformer scale sampled once from `Uniform(0.8, 1.2)`, and clipped AR(1) noise with coefficient 0.85. Convert active power to reactive power with:
 
@@ -492,11 +492,11 @@ q_mvar = p_mw * np.tan(np.arccos(cfg.power_factor))
 
 Use a daylight sine curve from 06:00 to 18:00, a daily cloud factor from `Uniform(0.65, 1.0)`, and each PV asset's `0.12 MW * cfg.pv_scale` nameplate. Non-PV columns remain zero.
 
-- [ ] **Step 5: Add a seed-separation test**
+- [x] **Step 5: Add a seed-separation test**
 
 Assert that seed 43 does not produce a DataFrame equal to seed 42 while retaining the same index and columns.
 
-- [ ] **Step 6: Run tests and commit**
+- [x] **Step 6: Run tests and commit**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/unit/test_profiles.py -v
