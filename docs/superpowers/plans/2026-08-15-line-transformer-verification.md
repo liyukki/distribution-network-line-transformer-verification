@@ -852,7 +852,7 @@ git commit -m "feat: score anomalies and recommend candidate feeders"
 - Consumes: predictions, truth topology, reported ledger, candidate scores.
 - Produces: `EvaluationResult`, `evaluate_predictions(...)`, `grouped_scenario_split(...)`.
 
-- [ ] **Step 1: Write failing metric tests with known answers**
+- [x] **Step 1: Write failing metric tests with known answers**
 
 ```python
 def test_evaluation_computes_detection_and_correction_metrics() -> None:
@@ -866,11 +866,11 @@ def test_evaluation_computes_detection_and_correction_metrics() -> None:
     assert result.confusion_matrix.shape == (2, 2)
 ```
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_evaluation.py -v`
 
-- [ ] **Step 3: Implement evaluation with truth merge restricted to this module**
+- [x] **Step 3: Implement evaluation with truth merge restricted to this module**
 
 ```python
 @dataclass(frozen=True)
@@ -882,11 +882,11 @@ class EvaluationResult:
 
 Derive actual error from `reported_feeder_id != physical_feeder_id`. Use scikit-learn `precision_recall_fscore_support(..., average="binary", zero_division=0)`, `average_precision_score`, and `confusion_matrix(labels=[False, True])`. Compute Top-1 only on actual error rows; define it as recommended feeder equal to physical feeder. Compute Top-3 by sorting each transformer's candidate scores descending and checking whether the physical feeder is among the first three. Store sample counts, automatic-decision coverage and insufficient-data rate.
 
-- [ ] **Step 4: Implement grouped split and its isolation test**
+- [x] **Step 4: Implement grouped split and its isolation test**
 
 `grouped_scenario_split(metadata, seed=42)` assigns whole `scenario_id` values to 60% train, 20% validation and 20% test using a deterministic shuffled group list. Assert the three scenario sets are pairwise disjoint and their union equals all scenarios.
 
-- [ ] **Step 5: Run tests and commit**
+- [x] **Step 5: Run tests and commit**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/unit/test_evaluation.py -v
