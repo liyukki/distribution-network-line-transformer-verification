@@ -19,3 +19,16 @@ def test_topology_export_has_valid_endpoints() -> None:
     assert {"from_node", "to_node", "edge_type", "feeder_id"} <= set(edges.columns)
     assert set(edges["from_node"]) <= set(nodes["node_id"])
     assert set(edges["to_node"]) <= set(nodes["node_id"])
+    main_trafo_edges = edges[
+        (edges["edge_type"] == "trafo") & (edges["feeder_id"] == "")
+    ]
+    assert len(main_trafo_edges) == 1
+    assert set(edges.loc[edges["edge_type"] == "line", "feeder_id"]) == {
+        "F01",
+        "F02",
+        "F03",
+    }
+    assert sorted(nodes["voltage_kv"].unique().tolist()) == [0.4, 10.0, 110.0]
+    assert artifacts.asset_table["pv_index"].notna().sum() == 6
+    second = build_network(NetworkConfig())
+    assert artifacts.asset_table.equals(second.asset_table)
