@@ -367,7 +367,7 @@ git commit -m "feat: build deterministic three-feeder network"
 - Consumes: `NetworkArtifacts` and `ValidationConfig`.
 - Produces: `PowerFlowValidation`, `run_static_validation(artifacts, cfg) -> PowerFlowValidation`.
 
-- [ ] **Step 1: Write failing physical-consistency tests**
+- [x] **Step 1: Write failing physical-consistency tests**
 
 ```python
 from ltverify.config import NetworkConfig, ValidationConfig
@@ -385,13 +385,13 @@ def test_static_case_converges_and_balances_power() -> None:
     assert result.violations == ()
 ```
 
-- [ ] **Step 2: Run the test and confirm failure**
+- [x] **Step 2: Run the test and confirm failure**
 
 Run: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_validation.py -v`
 
 Expected: FAIL because the validation module is missing.
 
-- [ ] **Step 3: Implement validation with explicit power direction**
+- [x] **Step 3: Implement validation with explicit power direction**
 
 ```python
 @dataclass(frozen=True)
@@ -417,11 +417,11 @@ balance_error = abs(float(supply - demand_and_losses))
 
 Add violations for non-convergence, voltage below/above configured bounds, balance error at or above `1e-6`, and any transformer loading above 100%.
 
-- [ ] **Step 4: Add an intentional undervoltage test**
+- [x] **Step 4: Add an intentional undervoltage test**
 
 Multiply every load by 8, use a 0.95 p.u. lower bound, and assert that `violations` contains a message beginning with `voltage below` or `transformer overload`. This verifies that validation detects physical problems instead of merely returning numbers.
 
-- [ ] **Step 5: Run tests and commit**
+- [x] **Step 5: Run tests and commit**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/unit/test_validation.py -v
