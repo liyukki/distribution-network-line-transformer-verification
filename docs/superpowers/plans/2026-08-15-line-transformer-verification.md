@@ -912,15 +912,15 @@ git commit -m "feat: evaluate detection and correction without leakage"
 - Consumes: all public functions from Tasks 1–10.
 - Produces: atomic writers, `RunManifest`, `run_pipeline(config_path) -> Path`, and CLI subcommands.
 
-- [ ] **Step 1: Write atomic I/O tests**
+- [x] **Step 1: Write atomic I/O tests**
 
 Test that `write_parquet_atomic(frame, path)` creates the parent directory, round-trips all columns, and leaves no `.tmp` file. Test that an unsupported suffix raises `ValueError("unsupported table format")`.
 
-- [ ] **Step 2: Implement focused I/O helpers**
+- [x] **Step 2: Implement focused I/O helpers**
 
 Provide `write_parquet_atomic`, `write_csv_atomic`, `write_json_atomic`, and matching readers. Write to a sibling temporary file, then replace the target with `Path.replace`. Encode JSON and CSV as UTF-8.
 
-- [ ] **Step 3: Write manifest tests and implement environment capture**
+- [x] **Step 3: Write manifest tests and implement environment capture**
 
 ```python
 def test_manifest_contains_reproduction_fields(tmp_path: Path) -> None:
@@ -951,7 +951,7 @@ class RunManifest(BaseModel):
     failure_summary: dict[str, str] | None = None
 ```
 
-- [ ] **Step 4: Write the short end-to-end pipeline test**
+- [x] **Step 4: Write the short end-to-end pipeline test**
 
 Use `tests/fixtures/small_config.yaml` with 3 feeders, 3 transformers per feeder, 1 day and 6-hour intervals. Assert the run directory contains:
 
@@ -971,15 +971,15 @@ network_nodes.csv
 network_edges.csv
 ```
 
-- [ ] **Step 5: Implement `run_pipeline` stage order and failure semantics**
+- [x] **Step 5: Implement `run_pipeline` stage order and failure semantics**
 
 The exact order is load config, create run directory, snapshot config, build network, validate static case, generate profiles, simulate, stop on failures, export truth and ledger, disturb observations, preprocess, build features, score, diagnose, evaluate, write artifacts, complete manifest. Wrap execution so manifest status becomes `failed` with the exception type and message before re-raising.
 
-- [ ] **Step 6: Implement CLI and test help/run-all**
+- [x] **Step 6: Implement CLI and test help/run-all**
 
 Use `argparse` with subcommands `simulate`, `corrupt`, `diagnose`, `evaluate`, and `run-all`. The initial public workflow must fully support `run-all`; other commands must validate prerequisite artifacts and print the missing file path. `python -m ltverify --help` exits 0; `python -m ltverify run-all --config tests/fixtures/small_config.yaml` prints the absolute run directory.
 
-- [ ] **Step 7: Run tests and commit**
+- [x] **Step 7: Run tests and commit**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/unit/test_io.py tests/integration/test_pipeline.py tests/integration/test_cli.py -v
