@@ -78,7 +78,7 @@
 - Produces: `AppConfig`, `load_config(path: Path) -> AppConfig`, `DataContractError`, `validate_columns(frame, required, table_name) -> None`.
 - Consumes: no project code.
 
-- [ ] **Step 1: Create packaging and dependency files**
+- [x] **Step 1: Create packaging and dependency files**
 
 Use this dependency contract in `pyproject.toml`:
 
@@ -120,7 +120,7 @@ target-version = "py311"
 
 Copy the nine application dependencies into `requirements.txt`, one per line. Ignore `.venv/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`, `data/raw/`, `data/interim/`, `data/processed/`, `runs/`, and `reports/figures/*.html` in `.gitignore`.
 
-- [ ] **Step 2: Create the environment and install the package**
+- [x] **Step 2: Create the environment and install the package**
 
 Run:
 
@@ -132,7 +132,7 @@ py -3.11 -m venv .venv
 
 Expected: editable installation completes and `python -c "import ltverify"` exits with code 0.
 
-- [ ] **Step 3: Write failing configuration tests**
+- [x] **Step 3: Write failing configuration tests**
 
 ```python
 from pathlib import Path
@@ -159,13 +159,13 @@ def test_invalid_voltage_limits_are_rejected(tmp_path: Path) -> None:
         load_config(path)
 ```
 
-- [ ] **Step 4: Run the configuration tests and confirm failure**
+- [x] **Step 4: Run the configuration tests and confirm failure**
 
 Run: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_config.py -v`
 
 Expected: FAIL because `ltverify.config` does not exist.
 
-- [ ] **Step 5: Implement typed configuration and default YAML**
+- [x] **Step 5: Implement typed configuration and default YAML**
 
 Define these models in `config.py`:
 
@@ -229,7 +229,7 @@ def load_config(path: Path) -> AppConfig:
 
 Write every field explicitly in `configs/default.yaml`, using the values above.
 
-- [ ] **Step 6: Write and implement contract tests**
+- [x] **Step 6: Write and implement contract tests**
 
 Test that missing columns raise an exact domain error:
 
@@ -248,7 +248,7 @@ def test_validate_columns_names_missing_fields() -> None:
 
 Implement `DataContractError(ValueError)` and `validate_columns`; keep required column sets `TRANSFORMER_MEASUREMENT_COLUMNS`, `FEEDER_MEASUREMENT_COLUMNS`, `LEDGER_COLUMNS`, and `TRUTH_COLUMNS` in this file.
 
-- [ ] **Step 7: Run quality checks and commit**
+- [x] **Step 7: Run quality checks and commit**
 
 Run:
 
@@ -274,7 +274,7 @@ Expected: all tests pass and ruff reports no errors.
 - Consumes: `NetworkConfig` from Task 1.
 - Produces: `NetworkArtifacts`, `build_network(cfg: NetworkConfig) -> NetworkArtifacts`, `topology_frames(artifacts) -> tuple[pd.DataFrame, pd.DataFrame]`.
 
-- [ ] **Step 1: Write the network shape test**
+- [x] **Step 1: Write the network shape test**
 
 ```python
 from ltverify.config import NetworkConfig
@@ -291,13 +291,13 @@ def test_default_network_contains_three_feeders_and_twenty_four_assets() -> None
     assert artifacts.asset_table["transformer_id"].is_unique
 ```
 
-- [ ] **Step 2: Run the test and confirm failure**
+- [x] **Step 2: Run the test and confirm failure**
 
 Run: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_network.py -v`
 
 Expected: FAIL because `ltverify.network` does not exist.
 
-- [ ] **Step 3: Implement the public artifact type**
+- [x] **Step 3: Implement the public artifact type**
 
 ```python
 @dataclass(frozen=True)
@@ -310,7 +310,7 @@ class NetworkArtifacts:
 
 `asset_table` must contain `transformer_id`, `physical_feeder_id`, `customer_type`, `transformer_capacity_kva`, `mv_bus`, `lv_bus`, `trafo_index`, `load_index`, and nullable `pv_index`.
 
-- [ ] **Step 4: Implement the deterministic network construction**
+- [x] **Step 4: Implement the deterministic network construction**
 
 Use `pp.create_empty_network(f_hz=50.0)`, an external-grid bus at 110 kV, a main transformer created from parameters, and one 10 kV bus. For each feeder create one head bus and line, then eight serial 10 kV sections. At each section create a 0.4 kV bus, one 10/0.4 kV transformer and one load. Create a zero-output `sgen` for transformer positions 3 and 6 on each feeder.
 
@@ -330,7 +330,7 @@ DISTRIBUTION_TRAFO_VKR_PERCENT = 1.2
 
 Assign customer types in the repeating order `residential`, `commercial`, `mixed`; name feeders `F01`–`F03` and transformers `T001`–`T024`.
 
-- [ ] **Step 5: Add topology export test and implementation**
+- [x] **Step 5: Add topology export test and implementation**
 
 Test:
 
@@ -346,7 +346,7 @@ def test_topology_export_has_valid_endpoints() -> None:
 
 Implement topology rows from pandapower buses, lines and transformers. Use an empty string for the main-transformer `feeder_id`; do not infer feeder identity from row order.
 
-- [ ] **Step 6: Run tests and commit**
+- [x] **Step 6: Run tests and commit**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/unit/test_network.py -v
