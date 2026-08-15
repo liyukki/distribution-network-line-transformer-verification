@@ -1084,7 +1084,7 @@ git commit -m "feat: run robustness and ablation experiments"
 - Consumes: one completed run directory and optional experiment summary.
 - Produces: Plotly `Figure` functions, `RunArtifacts`, and six Chinese dashboard pages.
 
-- [ ] **Step 1: Write figure contract tests**
+- [x] **Step 1: Write figure contract tests**
 
 ```python
 def test_confusion_matrix_figure_has_chinese_axes() -> None:
@@ -1096,11 +1096,11 @@ def test_confusion_matrix_figure_has_chinese_axes() -> None:
 
 Add equivalent tests for voltage curves, candidate score bars, similarity heatmap, topology, PR curve and robustness line chart. Each function receives DataFrames or arrays and returns a `go.Figure` without reading files.
 
-- [ ] **Step 2: Implement plotting functions and run unit tests**
+- [x] **Step 2: Implement plotting functions and run unit tests**
 
 Use consistent feeder colors, p.u. axis labels, tooltips with transformer/feeder IDs, and titles that include the scenario or method. Never display `Accuracy` as the headline metric.
 
-- [ ] **Step 3: Write artifact-loader tests**
+- [x] **Step 3: Write artifact-loader tests**
 
 Test `load_run_artifacts(run_dir)` against a fixture run. Missing `predictions.parquet` must raise `ArtifactLoadError` whose message includes the absolute path and the command `python -m ltverify run-all --config configs/default.yaml`.
 
@@ -1127,7 +1127,7 @@ class RunArtifacts:
     network_edges: pd.DataFrame
 ```
 
-- [ ] **Step 4: Implement the overview and five pages**
+- [x] **Step 4: Implement the overview and five pages**
 
 - Overview: run metadata, topology size, actual demo error count, predicted alert count, F1, Top-1 and coverage.
 - Network: schematic topology colored by reported or recommended feeder.
@@ -1138,11 +1138,11 @@ class RunArtifacts:
 
 Hide physical truth unless the sidebar `演示评价模式` toggle is active. Cache only file reads with `st.cache_data`; do not cache mutable pandapower networks.
 
-- [ ] **Step 5: Add Streamlit smoke test**
+- [x] **Step 5: Add Streamlit smoke test**
 
 Use `streamlit.testing.v1.AppTest.from_file("app/streamlit_app.py")`, set the fixture run directory through an environment variable `LTVERIFY_RUN_DIR`, run the app, and assert `len(app.exception) == 0` and the title contains `线变关系智能校验`.
 
-- [ ] **Step 6: Run tests and commit**
+- [x] **Step 6: Run tests and commit**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/unit/test_plotting.py tests/unit/test_app_data_access.py tests/integration/test_streamlit_smoke.py -v
