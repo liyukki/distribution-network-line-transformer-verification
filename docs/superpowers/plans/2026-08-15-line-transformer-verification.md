@@ -1171,11 +1171,11 @@ git commit -m "feat: add explainable Streamlit verification dashboard"
 - Consumes: stable commands and artifact schemas from Tasks 1–13.
 - Produces: user-facing learning, reproduction and interview materials.
 
-- [ ] **Step 1: Write documentation acceptance tests**
+- [x] **Step 1: Write documentation acceptance tests**
 
 Test that README contains these exact headings: `业务背景`, `方法`, `快速开始`, `实验设计`, `结果`, `项目限制`, `仓库结构`, `面试展示`. Test that it does not match the regular expression `准确率.{0,8}90\.3%`. Test that all commands use `python -m ltverify` or `streamlit run` and referenced local paths exist.
 
-- [ ] **Step 2: Write README and data dictionary**
+- [x] **Step 2: Write README and data dictionary**
 
 README must lead with the problem and one architecture diagram, then show installation, the small smoke run, the default run, dashboard startup, artifact table, experiment protocol, verified results, limitations and citation/provenance. Before full experiments exist, the result section must say `尚未运行完整实验，以下仅展示可复现流程，不报告性能结论。`
 
@@ -1183,21 +1183,21 @@ README must lead with the problem and one architecture diagram, then show instal
 
 Use the MIT License text with copyright line `Copyright (c) 2026 Project Contributors`; do not insert a personal name without user approval.
 
-- [ ] **Step 3: Write methodology and interview guide**
+- [x] **Step 3: Write methodology and interview guide**
 
 `docs/methodology.md` includes Pearson formula, first difference, rolling correlation, event Jaccard, weighted score, threshold rule, precision/recall/F1/PR-AUC, p.u. convention, slack/PQ nodes, power direction, balance check and balanced-model limitation.
 
 `docs/interview-guide.md` includes a three-minute demo script and answers to: why different feeders can still be correlated, why z-score is unnecessary before Pearson, how threshold leakage is avoided, why not use GNN, how synthetic data differs from field data, and how to extend to unbalanced networks.
 
-- [ ] **Step 4: Create three executable notebooks**
+- [x] **Step 4: Create three executable notebooks**
 
 Use the repository's installed package rather than copying algorithm code into notebook cells. Each notebook starts with the config and run directory, has no hidden state, uses a fixed seed, writes figures only under `reports/figures/`, and executes from top to bottom without error. The three notebooks cover network sanity, baseline-vs-enhanced analysis and robustness aggregation respectively.
 
-- [ ] **Step 5: Create Windows scripts**
+- [x] **Step 5: Create Windows scripts**
 
 `run_pipeline.ps1` resolves the repository root from `$PSScriptRoot`, verifies `.venv\Scripts\python.exe`, and runs `python -m ltverify run-all --config configs/default.yaml`. `run_dashboard.ps1` accepts a mandatory `-RunDir`, resolves it to an absolute path, sets `LTVERIFY_RUN_DIR`, and launches Streamlit with a hidden background helper window only if a helper process is needed.
 
-- [ ] **Step 6: Run notebook and documentation checks**
+- [x] **Step 6: Run notebook and documentation checks**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/unit/test_documentation.py -v
