@@ -43,3 +43,20 @@ def test_non_convergence_is_reported_not_silent(monkeypatch: pytest.MonkeyPatch)
     assert math.isnan(result.voltage_max_pu)
     assert math.isnan(result.absolute_power_balance_error_mw)
     assert result.violations == ("power flow did not converge",)
+
+
+def test_check_solved_network_records_physical_violations() -> None:
+    from ltverify.validation import check_solved_network
+
+    artifacts = build_network(NetworkConfig())
+    artifacts.net.load["p_mw"] = 0.08 * 8
+    pp.runpp(artifacts.net, calculate_voltage_angles=False, init="auto")
+    result = check_solved_network(artifacts.net, ValidationConfig())
+    assert result.converged is True
+    assert result.maximum_transformer_loading_percent > 100.0
+    assert "transformer_overload" in " | ".join(result.violation_types)
+    assert result.severity == "warning"
+    artifacts.net.res_ext_grid["p_mw"] = artifacts.net.res_ext_grid["p_mw"] + 1.0
+    broken = check_solved_network(artifacts.net, ValidationConfig())
+    assert "power_balance" in " | ".join(broken.violation_types)
+    assert broken.severity == "critical"

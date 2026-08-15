@@ -64,3 +64,21 @@ def test_grouped_scenario_split_partitions_scenarios() -> None:
             assert not left & right
     assert set().union(*parts) == set(metadata["scenario_id"])
     assert grouped_scenario_split(metadata, seed=42) == split
+
+
+def test_pr_auc_uses_continuous_anomaly_score() -> None:
+    predictions, truth, ledger, candidate_scores = evaluation_fixture()
+    base = predictions.assign(anomaly_score=[0.9, 0.8, 0.7])
+    flipped = predictions.assign(anomaly_score=[0.1, 0.2, 0.3])
+    assert (base["predicted_is_mislinked"] == flipped["predicted_is_mislinked"]).all()
+    first = evaluate_predictions(base, truth, ledger, candidate_scores)
+    second = evaluate_predictions(flipped, truth, ledger, candidate_scores)
+    assert first.metrics["pr_auc"] != second.metrics["pr_auc"]
+
+
+def test_top3_is_not_applicable_with_only_three_candidates() -> None:
+    predictions, truth, ledger, candidate_scores = evaluation_fixture()
+    result = evaluate_predictions(predictions, truth, ledger, candidate_scores)
+    assert result.metrics["candidate_feeder_count"] == 3
+    assert result.metrics["top3_correction_rate"] is None
+    assert isinstance(result.metrics["top2_correction_rate"], float)

@@ -117,3 +117,40 @@ def test_enhanced_score_renormalizes_over_available_features() -> None:
     assert scored.loc[0, "baseline_score"] == pytest.approx(1.0)
     assert scored.loc[0, "enhanced_score"] == pytest.approx(1.0)
     assert scored.loc[1, "enhanced_score"] == pytest.approx(0.75)
+
+
+def test_nan_current_score_yields_insufficient_data() -> None:
+    scored, ledger = scored_candidate_fixture()
+    scored.loc[scored["transformer_id"] == "T001", "enhanced_score"] = float("nan")
+    predictions = diagnose(scored, ledger, ScoringConfig())
+    row = predictions.set_index("transformer_id").loc["T001"]
+    assert row["decision"] == "insufficient_data"
+
+
+def test_nan_coverage_yields_insufficient_data() -> None:
+    scored, ledger = scored_candidate_fixture()
+    scored.loc[scored["transformer_id"] == "T001", "coverage"] = float("nan")
+    predictions = diagnose(scored, ledger, ScoringConfig())
+    row = predictions.set_index("transformer_id").loc["T001"]
+    assert row["decision"] == "insufficient_data"
+
+
+def test_margin_finite_whenever_both_scores_are_finite() -> None:
+    scored, ledger = scored_candidate_fixture()
+    predictions = diagnose(scored, ledger, ScoringConfig())
+    row = predictions.set_index("transformer_id").loc["T002"]
+    assert row["decision"] == "no_change"
+    assert np.isfinite(row["margin"])
+    assert row["margin"] == pytest.approx(0.85 - 0.90)
+
+
+def test_insufficient_evidence_weight_blocks_recommendation() -> None:
+    scored, ledger = scored_candidate_fixture()
+    scored["available_feature_weight"] = 1.0
+    scored.loc[scored["transformer_id"] == "T001", "available_feature_weight"] = 0.1
+    predictions = diagnose(
+        scored, ledger, ScoringConfig(evidence_weight_threshold=0.5)
+    )
+    row = predictions.set_index("transformer_id").loc["T001"]
+    assert row["decision"] == "insufficient_data"
+    assert bool(row["predicted_is_mislinked"]) is False

@@ -109,3 +109,28 @@ def test_safe_corr_requires_minimum_pairs() -> None:
     right = pd.Series([1.0, 2.0, 3.0])
     assert pd.isna(safe_corr(left, right, minimum_pairs=16))
     assert safe_corr(left, right, minimum_pairs=3) == pytest.approx(1.0)
+
+
+def test_legal_feeder_without_ledger_members_stays_in_features() -> None:
+    prepared, ledger, feeder_measurements = candidate_feature_fixture()
+    trimmed = ledger[ledger["reported_feeder_id"] != "F02"]
+    features = build_candidate_features(
+        prepared, trimmed, feeder_measurements, rolling_window=24, event_quantile=0.90
+    )
+    assert "F02" in set(features["candidate_feeder_id"])
+    f02_rows = features[
+        (features["transformer_id"] == "T001")
+        & (features["candidate_feeder_id"] == "F02")
+    ]
+    assert f02_rows["peer_count"].iloc[0] == 0
+    assert pd.isna(f02_rows["raw_corr"].iloc[0])
+    assert np.isfinite(f02_rows["active_power_corr"].iloc[0])
+
+
+def test_features_include_evidence_weight() -> None:
+    prepared, ledger, feeder_measurements = candidate_feature_fixture()
+    features = build_candidate_features(
+        prepared, ledger, feeder_measurements, rolling_window=24, event_quantile=0.90
+    )
+    assert "available_feature_weight" in features.columns
+    assert features["available_feature_weight"].between(0.0, 1.0).all()

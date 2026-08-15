@@ -45,3 +45,50 @@ def test_high_pv_scenario_produces_reverse_power() -> None:
     result = simulate_time_series(artifacts, profiles, ValidationConfig())
     assert result.failures.empty
     assert (result.transformer_measurements["p_mw"] < 0).any()
+
+
+def test_simulation_records_per_timestep_validation() -> None:
+    artifacts = build_network(NetworkConfig())
+    profiles = generate_profiles(
+        artifacts, ProfileConfig(days=1, interval_minutes=360), seed=42
+    )
+    result = simulate_time_series(artifacts, profiles, ValidationConfig())
+    assert len(result.validation) == 4
+    required = {
+        "timestamp",
+        "converged",
+        "voltage_min_pu",
+        "voltage_max_pu",
+        "maximum_transformer_loading_percent",
+        "absolute_power_balance_error_mw",
+        "violation_type",
+        "message",
+        "severity",
+    }
+    assert required <= set(result.validation.columns)
+    assert result.validation["converged"].all()
+
+
+def test_init_falls_back_to_auto_after_non_convergence(monkeypatch) -> None:
+    import pandapower as pp
+
+    from ltverify import simulation as simulation_module
+
+    artifacts = build_network(NetworkConfig())
+    profiles = generate_profiles(
+        artifacts, ProfileConfig(days=1, interval_minutes=360), seed=42
+    )
+    original = pp.runpp
+    calls: list[str | None] = []
+
+    def counting_runpp(net, **kwargs):
+        init = kwargs.get("init")
+        calls.append(init)
+        if len(calls) == 3:
+            raise pp.LoadflowNotConverged("forced")
+        return original(net, **kwargs)
+
+    monkeypatch.setattr(simulation_module.pp, "runpp", counting_runpp)
+    result = simulate_time_series(artifacts, profiles, ValidationConfig())
+    assert len(result.failures) == 1
+    assert calls == ["auto", "results", "results", "auto"]
