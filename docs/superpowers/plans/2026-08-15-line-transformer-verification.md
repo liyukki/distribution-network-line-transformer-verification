@@ -516,7 +516,7 @@ git commit -m "feat: generate deterministic load and solar profiles"
 - Consumes: `NetworkArtifacts`, `TimeSeriesProfiles`, `ValidationConfig`.
 - Produces: `SimulationResult`, `simulate_time_series(artifacts, profiles, validation_cfg) -> SimulationResult`.
 
-- [ ] **Step 1: Write a four-step integration test**
+- [x] **Step 1: Write a four-step integration test**
 
 ```python
 def test_short_simulation_emits_transformer_and_feeder_measurements() -> None:
@@ -533,11 +533,11 @@ def test_short_simulation_emits_transformer_and_feeder_measurements() -> None:
     assert result.transformer_measurements["voltage_pu"].between(0.90, 1.10).all()
 ```
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `.\.venv\Scripts\python.exe -m pytest tests/integration/test_simulation.py -v`
 
-- [ ] **Step 3: Implement exact output contracts**
+- [x] **Step 3: Implement exact output contracts**
 
 ```python
 @dataclass(frozen=True)
@@ -549,7 +549,7 @@ class SimulationResult:
 
 Transformer rows contain `timestamp`, `transformer_id`, `voltage_pu`, `p_mw`, `q_mvar`, and `data_quality_flag="clean"`. Feeder rows contain `timestamp`, `feeder_id`, `head_voltage_pu`, `p_mw`, and `q_mvar`. Failure rows contain `timestamp`, `error_type`, and `message`.
 
-- [ ] **Step 4: Implement the time-step update loop**
+- [x] **Step 4: Implement the time-step update loop**
 
 For each timestamp, assign each load's P/Q and each existing PV's active power, call `pp.runpp(net, init="results")`, then read:
 
@@ -560,11 +560,11 @@ For each timestamp, assign each load's P/Q and each existing PV's active power, 
 
 On `LoadflowNotConverged`, append one failure row. The default pipeline must stop after simulation if failures are nonempty; the simulator itself returns collected failures for diagnosis.
 
-- [ ] **Step 5: Add reverse-power and repeatability assertions**
+- [x] **Step 5: Add reverse-power and repeatability assertions**
 
 Create a high-PV four-step fixture by multiplying PV by 6 and reducing loads to 20%. Assert at least one transformer `p_mw < 0`. Run the normal fixture twice and assert exact DataFrame equality.
 
-- [ ] **Step 6: Run tests and commit**
+- [x] **Step 6: Run tests and commit**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/integration/test_simulation.py -v
