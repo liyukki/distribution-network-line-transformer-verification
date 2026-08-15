@@ -1223,7 +1223,7 @@ git commit -m "docs: add reproducible usage and interview materials"
 - Consumes: complete application and experiment runner.
 - Produces: verified release evidence and measured README statements.
 
-- [ ] **Step 1: Run static quality and complete tests**
+- [x] **Step 1: Run static quality and complete tests**
 
 ```powershell
 .\.venv\Scripts\python.exe -m ruff check src app tests
@@ -1232,7 +1232,7 @@ git commit -m "docs: add reproducible usage and interview materials"
 
 Expected: ruff exits 0; every test passes; coverage report has no untested core module among `network`, `validation`, `corruption`, `features`, `scoring`, and `evaluation`.
 
-- [ ] **Step 2: Run the default 30-day pipeline**
+- [x] **Step 2: Run the default 30-day pipeline**
 
 ```powershell
 .\.venv\Scripts\python.exe -m ltverify run-all --config configs/default.yaml
@@ -1240,7 +1240,7 @@ Expected: ruff exits 0; every test passes; coverage report has no untested core 
 
 Expected: command prints a run directory; its manifest status is `completed`; simulation failures are zero; voltage and power-balance checks pass; metrics and figures exist.
 
-- [ ] **Step 3: Run the robustness matrix**
+- [x] **Step 3: Run the robustness matrix**
 
 ```powershell
 .\.venv\Scripts\python.exe -m ltverify experiments --config configs/robustness.yaml
@@ -1248,15 +1248,15 @@ Expected: command prints a run directory; its manifest status is `completed`; si
 
 Expected: 130 raw case rows exist. Every failed case includes an error type and message. Aggregate tables include means, standard deviations, successful counts and failure counts.
 
-- [ ] **Step 4: Audit scientific claims against artifacts**
+- [x] **Step 4: Audit scientific claims against artifacts**
 
 Copy only measured values from completed manifests and metric files into README. Confirm the default clean-test F1 statement, any improvement-over-baseline statement, and Top-1 statement can each be traced to an exact run ID. If enhanced scoring loses to the baseline in a scenario, preserve that result and explain it.
 
-- [ ] **Step 5: Verify a clean checkout workflow**
+- [x] **Step 5: Verify a clean checkout workflow**
 
 Create a fresh non-workspace temporary directory, clone the local repository into it, create a new virtual environment, install the package, run the small integration configuration, and start the Streamlit smoke test. Remove only that explicitly resolved temporary directory after verification.
 
-- [ ] **Step 6: Commit release evidence**
+- [x] **Step 6: Commit release evidence**
 
 ```powershell
 git add README.md reports/metrics reports/figures/README.md
