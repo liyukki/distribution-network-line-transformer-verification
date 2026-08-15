@@ -147,7 +147,11 @@ def generate_profiles(
     for transformer_id in pv_ids:
         column = transformer_ids.index(transformer_id)
         clouds = rng.uniform(_PV_CLOUD_LOW, _PV_CLOUD_HIGH, size=len(day_starts))
-        cloud_by_step = np.repeat(clouds, periods // len(day_starts))
+        cloud_by_step = (
+            pd.Series(clouds, index=day_starts)
+            .reindex(index.normalize())
+            .to_numpy()
+        )
         pv_p[:, column] = (
             _PV_NAMEPLATE_MW * cfg.pv_scale * daylight * cloud_by_step
         )
