@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "distribution-network-line-transformer-verification"
+version = "0.1.0"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "numpy>=1.26,<3",
+  "pandas>=2.2,<3",
+  "pandapower>=3.0,<4",
+  "scikit-learn>=1.5,<2",
+  "pyarrow>=17,<30",
+  "pydantic>=2.8,<3",
+  "PyYAML>=6,<7",
+  "plotly>=5.24,<7",
+  "streamlit>=1.38,<2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "pytest-cov>=5,<8", "ruff>=0.6,<1", "jupyter>=1,<2"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# DTZ001: project timestamps are naive civil local time by design (15-min grid,
+# pandas interop, spec 6.2 data contract). Ruff >=0.16 enables DTZ by default.
+ignore = ["DTZ001"]
