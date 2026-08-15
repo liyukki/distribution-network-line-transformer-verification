@@ -705,7 +705,7 @@ git commit -m "feat: preprocess measurements and remove common voltage mode"
 - Consumes: `PreparedMeasurements`, reported ledger, feeder measurements.
 - Produces: `build_candidate_features(prepared, ledger, feeder_measurements, rolling_window, event_quantile) -> pd.DataFrame`.
 
-- [ ] **Step 1: Write a handcrafted candidate-ranking test**
+- [x] **Step 1: Write a handcrafted candidate-ranking test**
 
 Create 192 points where `T001` follows an F01 pattern, F01 peer transformers follow the same pattern with small noise, and F02 peers follow a phase-shifted pattern. Test:
 
@@ -724,11 +724,11 @@ def test_candidate_features_favor_matching_feeder() -> None:
     assert t1.loc["F01", "event_match"] > t1.loc["F02", "event_match"]
 ```
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_features.py -v`
 
-- [ ] **Step 3: Implement safe correlation and group-center helpers**
+- [x] **Step 3: Implement safe correlation and group-center helpers**
 
 ```python
 def safe_corr(left: pd.Series, right: pd.Series, minimum_pairs: int = 16) -> float:
@@ -740,7 +740,7 @@ def safe_corr(left: pd.Series, right: pd.Series, minimum_pairs: int = 16) -> flo
 
 For each candidate transformer and feeder, compute the peer center as the row median of ledger members, excluding the candidate itself. Require at least two peer devices; otherwise emit NaN features and `peer_count`.
 
-- [ ] **Step 4: Implement the exact feature schema**
+- [x] **Step 4: Implement the exact feature schema**
 
 Return one row per transformer–candidate feeder pair with:
 
@@ -752,11 +752,11 @@ rolling_corr_q10, event_match, active_power_corr, coverage
 
 Rolling correlations use the configured sample window and `min_periods = rolling_window // 2`. Event match is Jaccard similarity between candidate and peer-center timestamps whose absolute first difference exceeds each series' own configured quantile. `active_power_corr` compares transformer active power to the matching legal feeder measurement; it must never aggregate using `physical_feeder_id`.
 
-- [ ] **Step 5: Add self-exclusion and no-truth tests**
+- [x] **Step 5: Add self-exclusion and no-truth tests**
 
 Assert a one-device group yields `peer_count == 0` and NaN correlations. Assert the returned feature columns do not contain `physical_feeder_id`, `is_mislinked`, or `seed`.
 
-- [ ] **Step 6: Run tests and commit**
+- [x] **Step 6: Run tests and commit**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/unit/test_features.py -v
