@@ -776,7 +776,7 @@ git commit -m "feat: engineer explainable feeder candidate features"
 - Consumes: candidate feature table, ledger, `ScoringConfig`.
 - Produces: `ScoreWeights`, `score_candidates(features, weights)`, `diagnose(scored, ledger, cfg)`.
 
-- [ ] **Step 1: Write failing weighted-score tests**
+- [x] **Step 1: Write failing weighted-score tests**
 
 ```python
 def test_default_weights_sum_to_one() -> None:
@@ -796,11 +796,11 @@ def test_diagnosis_flags_wrong_ledger_and_recommends_best_feeder() -> None:
     assert row["decision"] == "automatic_recommendation"
 ```
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_scoring.py -v`
 
-- [ ] **Step 3: Implement baseline and default enhanced weights**
+- [x] **Step 3: Implement baseline and default enhanced weights**
 
 ```python
 @dataclass(frozen=True)
@@ -816,7 +816,7 @@ class ScoreWeights:
 
 `baseline_score` equals `raw_corr`. `enhanced_score` is the weighted mean over available features after mapping correlations from `[-1, 1]` to `[0, 1]`; renormalize weights over nonmissing features. Coverage is a gate, not a score component.
 
-- [ ] **Step 4: Implement conservative diagnosis**
+- [x] **Step 4: Implement conservative diagnosis**
 
 For each transformer, obtain current-ledger score and highest candidate score. Define `margin = best_score - current_score`. Return:
 
@@ -828,11 +828,11 @@ predicted_is_mislinked, confidence, decision
 
 Use `decision="insufficient_data"` below minimum coverage. Use `automatic_recommendation` only when current score is below threshold and margin exceeds threshold; otherwise use `no_change`. Confidence is `coverage * clip((margin - margin_threshold) / (1 - margin_threshold), 0, 1)`.
 
-- [ ] **Step 5: Add insufficient-data and stable-ledger tests**
+- [x] **Step 5: Add insufficient-data and stable-ledger tests**
 
 Assert low coverage refuses automatic recommendation. Assert a transformer whose current feeder is already best remains `no_change` even when another candidate is close.
 
-- [ ] **Step 6: Run tests and commit**
+- [x] **Step 6: Run tests and commit**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/unit/test_scoring.py -v
