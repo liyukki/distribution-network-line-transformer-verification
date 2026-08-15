@@ -584,7 +584,7 @@ git commit -m "feat: simulate clean transformer and feeder measurements"
 - Consumes: `NetworkArtifacts`, clean transformer measurements, `CorruptionConfig`, seed.
 - Produces: `build_truth(artifacts)`, `corrupt_ledger(truth, rate, seed)`, `disturb_measurements(clean, cfg, seed)`.
 
-- [ ] **Step 1: Write failing ledger tests**
+- [x] **Step 1: Write failing ledger tests**
 
 ```python
 def test_twenty_percent_ledger_corruption_changes_five_of_twenty_four() -> None:
@@ -597,15 +597,15 @@ def test_twenty_percent_ledger_corruption_changes_five_of_twenty_four() -> None:
     assert "is_mislinked" not in ledger.columns
 ```
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `.\.venv\Scripts\python.exe -m pytest tests/unit/test_corruption.py -v`
 
-- [ ] **Step 3: Implement truth and deterministic ledger corruption**
+- [x] **Step 3: Implement truth and deterministic ledger corruption**
 
 `build_truth` selects `transformer_id`, `physical_feeder_id`, `transformer_capacity_kva`, and `customer_type` from `asset_table`. `corrupt_ledger` samples `round(rate * n)` unique transformer IDs and assigns each a feeder sampled from all feeders except its physical feeder. Return only `transformer_id`, `reported_feeder_id`, `transformer_capacity_kva`, and `customer_type`.
 
-- [ ] **Step 4: Write failing disturbance tests**
+- [x] **Step 4: Write failing disturbance tests**
 
 ```python
 def test_disturbance_is_deterministic_and_preserves_schema(clean_measurements) -> None:
@@ -618,11 +618,11 @@ def test_disturbance_is_deterministic_and_preserves_schema(clean_measurements) -
     assert first["data_quality_flag"].str.contains("missing|spike|noisy").any()
 ```
 
-- [ ] **Step 5: Implement disturbances without changing clean input**
+- [x] **Step 5: Implement disturbances without changing clean input**
 
 Copy the input deeply. Add normal voltage noise, sample exact row indices for missing values, and sample disjoint indices for spikes. When `time_shift_steps > 0`, select `round(time_shift_device_rate * device_count)` devices with a minimum of one and shift their value columns within each device group. Combine flags with `|` in the order `noisy`, `missing`, `spike`, `shifted`. Leave timestamps and IDs unchanged.
 
-- [ ] **Step 6: Run tests and commit**
+- [x] **Step 6: Run tests and commit**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/unit/test_corruption.py -v
