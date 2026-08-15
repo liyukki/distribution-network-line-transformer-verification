@@ -57,7 +57,7 @@ def disturb_measurements(
     clean: pd.DataFrame, cfg: CorruptionConfig, seed: int
 ) -> pd.DataFrame:
     """Add noise, missing values, spikes and time shifts to a deep copy."""
-    frame = clean.copy(deep=True)
+    frame = clean.copy(deep=True).reset_index(drop=True)
     rng = np.random.default_rng(seed)
     row_count = len(frame)
     flags: dict[int, set[str]] = {index: set() for index in range(row_count)}

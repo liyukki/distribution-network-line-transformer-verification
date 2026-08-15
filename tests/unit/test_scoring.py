@@ -64,6 +64,15 @@ def test_low_coverage_refuses_automatic_recommendation() -> None:
     assert bool(row["predicted_is_mislinked"]) is False
 
 
+def test_diagnosis_survives_all_nan_candidate_scores() -> None:
+    scored, ledger = scored_candidate_fixture()
+    scored.loc[scored["transformer_id"] == "T001", "enhanced_score"] = float("nan")
+    predictions = diagnose(scored, ledger, ScoringConfig())
+    row = predictions.set_index("transformer_id").loc["T001"]
+    assert row["decision"] == "no_change"
+    assert bool(row["predicted_is_mislinked"]) is False
+
+
 def test_stable_ledger_stays_unchanged_when_candidate_is_close() -> None:
     scored, ledger = scored_candidate_fixture()
     predictions = diagnose(

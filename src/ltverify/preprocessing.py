@@ -32,9 +32,11 @@ def prepare_measurements(
 ) -> PreparedMeasurements:
     """Validate, align, interpolate and de-trend long-form measurements.
 
-    Devices below minimum_coverage stay in the exported data with their
-    coverage value below the threshold so downstream stages can refuse
-    automatic diagnosis instead of silently dropping them.
+    minimum_coverage is accepted for interface compatibility with the plan
+    contract; the coverage threshold gate itself is applied downstream in
+    the diagnosis stage. Devices with low coverage stay in the exported
+    data with their coverage value so the diagnosis can refuse automatic
+    recommendations instead of silently dropping them.
     """
     if frame.duplicated(subset=["timestamp", "transformer_id"]).any():
         raise DataContractError("duplicate timestamp-transformer pairs")

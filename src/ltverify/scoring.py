@@ -92,10 +92,11 @@ def diagnose(
         coverage = float(group["coverage"].iloc[0])
         best_score = float("nan")
         recommended: object = reported
-        if len(others):
-            best_index = others["enhanced_score"].idxmax()
-            best_score = float(others.loc[best_index, "enhanced_score"])
-            best_candidate = others.loc[best_index, "candidate_feeder_id"]
+        valid_others = others.dropna(subset=["enhanced_score"])
+        if len(valid_others):
+            best_index = valid_others["enhanced_score"].idxmax()
+            best_score = float(valid_others.loc[best_index, "enhanced_score"])
+            best_candidate = valid_others.loc[best_index, "candidate_feeder_id"]
 
         decision = "no_change"
         predicted = False
