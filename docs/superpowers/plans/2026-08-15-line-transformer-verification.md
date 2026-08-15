@@ -1270,13 +1270,13 @@ Expected: final status is clean. Do not tag or push without an explicit user req
 
 ## Completion Checklist
 
-- [ ] All 15 task commits exist in order and each task passed its target tests before commit.
-- [ ] Default network, profiles and ledger corruption match the fixed first-release shape.
-- [ ] Physical truth is isolated and automated leakage tests pass.
-- [ ] Default 30-day run completes with recorded physical checks.
-- [ ] Baseline, enhanced score, ablations and five robustness families have reproducible metrics.
-- [ ] Dashboard loads a completed run and explains a single-transformer decision.
-- [ ] README clearly separates observed results, research targets and limitations.
-- [ ] No performance number appears in resume material without a run ID and metric artifact.
-- [ ] Full pytest and ruff checks pass from a clean environment.
-- [ ] Repository is clean; no large generated run directory is tracked.
+- [x] All 15 task commits exist in order and each task passed its target tests before commit.
+- [x] Default network, profiles and ledger corruption match the fixed first-release shape.
+- [x] Physical truth is isolated and automated leakage tests pass.
+- [x] Default 30-day run completes with recorded physical checks.
+- [x] Baseline, enhanced score, ablations and five robustness families have reproducible metrics.
+- [x] Dashboard loads a completed run and explains a single-transformer decision.
+- [x] README clearly separates observed results, research targets and limitations.
+- [x] No performance number appears in resume material without a run ID and metric artifact.
+- [x] Full pytest and ruff checks pass from a clean environment.
+- [x] Repository is clean; no large generated run directory is tracked.
