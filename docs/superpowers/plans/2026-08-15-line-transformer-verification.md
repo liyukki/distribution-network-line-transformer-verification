@@ -1002,7 +1002,7 @@ git commit -m "feat: add reproducible end-to-end pipeline"
 - Consumes: base configuration and `run_pipeline`-compatible stage functions.
 - Produces: `ExperimentCase`, `expand_experiment_grid(path)`, `run_experiments(path, output_dir)` and aggregate metrics.
 
-- [ ] **Step 1: Write the exact experiment configuration**
+- [x] **Step 1: Write the exact experiment configuration**
 
 ```yaml
 base_config: configs/default.yaml
@@ -1024,11 +1024,11 @@ seeds: [42, 43, 44, 45, 46]
 
 Run one factor at a time around the default base case; do not form the full Cartesian product.
 
-- [ ] **Step 2: Write failing grid-expansion tests**
+- [x] **Step 2: Write failing grid-expansion tests**
 
 Assert there are `4 * 5 * 5 + 6 * 5 = 130` cases: five one-factor experiment families with four levels across five seeds, plus six ablations across five seeds. Assert case IDs are unique and encode family, level and seed.
 
-- [ ] **Step 3: Implement experiment case expansion**
+- [x] **Step 3: Implement experiment case expansion**
 
 ```python
 @dataclass(frozen=True)
@@ -1043,19 +1043,19 @@ class ExperimentCase:
 
 Map each family to an exact config path. Map ablations to immutable feature-name tuples matching `ScoreWeights` fields.
 
-- [ ] **Step 4: Write and implement a two-case smoke runner**
+- [x] **Step 4: Write and implement a two-case smoke runner**
 
 The integration fixture selects two cases and a one-day profile. Assert `experiment_summary.csv` has two rows and contains `case_id`, `family`, `value`, `seed`, `precision`, `recall`, `f1`, `top1_correction_rate`, `top3_correction_rate`, `automatic_coverage`, `runtime_seconds`, and `status`.
 
-- [ ] **Step 5: Add aggregate summaries**
+- [x] **Step 5: Add aggregate summaries**
 
 Group successful runs by family/value and export mean, sample standard deviation and run count for every metric. Failed runs remain in the raw summary and are not silently removed; aggregate output includes `failure_count`. Cache clean simulation artifacts by `(seed, pv_scale)` so ledger, noise, missingness, time-shift and ablation cases reuse identical physical data instead of repeating the same 2880潮流 calculations.
 
-- [ ] **Step 6: Add the experiment CLI command**
+- [x] **Step 6: Add the experiment CLI command**
 
 Extend `cli.py` with `python -m ltverify experiments --config configs/robustness.yaml`. The command calls `run_experiments`, prints the absolute experiment directory, and exits nonzero only when grid expansion fails or every case fails. Individual failed cases remain recorded in the summary.
 
-- [ ] **Step 7: Run tests and commit**
+- [x] **Step 7: Run tests and commit**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/unit/test_experiments.py tests/integration/test_experiment_smoke.py -v
