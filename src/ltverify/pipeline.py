@@ -51,11 +51,11 @@ def run_pipeline(config_path: Path) -> Path:
     run_dir.mkdir(parents=True, exist_ok=False)
 
     manifest = build_manifest(config_path, run_dir)
-    _write_manifest(manifest, run_dir, [])
 
     failure_context: dict[str, object] = {}
     try:
         shutil.copyfile(config_path, run_dir / "config.snapshot.yaml")
+        _write_manifest(manifest, run_dir, [])
         artifacts = build_network(config.network)
 
         base_case = run_static_validation(artifacts, config.validation)
@@ -192,5 +192,11 @@ def run_pipeline(config_path: Path) -> Path:
         }
         failure_summary.update(failure_context)
         manifest.failure_summary = failure_summary
-        _write_manifest(manifest, run_dir, [])
+        snapshot = run_dir / "config.snapshot.yaml"
+        if snapshot.exists():
+            _write_manifest(manifest, run_dir, [snapshot])
+        else:
+            manifest_path = run_dir / "manifest.json"
+            if manifest_path.exists():
+                manifest_path.unlink()
         raise
