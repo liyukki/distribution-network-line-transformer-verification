@@ -1,11 +1,11 @@
 {
-  "run_id": "20260816T071854Z-305edb",
+  "run_id": "20260816T083229Z-1c17b5",
   "artifact_schema_version": 2,
-  "started_at_utc": "2026-08-16T07:18:54.388198Z",
-  "finished_at_utc": "2026-08-16T07:19:48.021484Z",
+  "started_at_utc": "2026-08-16T08:32:29.489321Z",
+  "finished_at_utc": "2026-08-16T08:33:52.851742Z",
   "status": "completed",
   "config_sha256": "7b966854bb4576ceabf8c7c24d44e0046e536399f4ce20be4d51d5c68dbb04fb",
-  "git_commit": "b24c9f849af739b93d1178a942c3153923d5a397",
+  "git_commit": "94ee059f7ed2071e16a76b8fcbf31c07a0ec7359",
   "python_version": "3.12.13",
   "package_versions": {
     "pandapower": "3.5.4",
@@ -20,6 +20,7 @@
     "configs\\default.yaml"
   ],
   "output_paths": [
+    "config.snapshot.yaml",
     "truth_topology.csv",
     "reported_ledger.csv",
     "transformer_measurements.parquet",
@@ -34,6 +35,7 @@
     "simulation_validation.csv"
   ],
   "output_sha256": {
+    "config.snapshot.yaml": "7b966854bb4576ceabf8c7c24d44e0046e536399f4ce20be4d51d5c68dbb04fb",
     "truth_topology.csv": "f18adb0ea21e9d83cae7e959d7ea3e86e25f39be0bf4499b6820a2f041c83b79",
     "reported_ledger.csv": "0e16ea682d667ca2b8bb4d895338f3e39713d4fbaf7630ca6b65966d1253a189",
     "transformer_measurements.parquet": "ed6a4d35a949d597f15f3512202a6d1c1c75a1e2fc350edfc3527c3249eb6bc4",
@@ -41,7 +43,7 @@
     "observed_measurements.parquet": "bcdb32e4a73d622d5dcd000a03305f0e44b8fa428b029aa168bf5369e251e580",
     "candidate_features.parquet": "6a3dc2ffaa8398d4d56290fa7e06eb40aa620540d2ac7cd50e5d1a9d7352c576",
     "predictions.parquet": "434f7ff48a1eda22e74511ac273e2c7a42a9ee8c38de144d4877bd45ba0327d6",
-    "metrics.json": "193f869d2350493bd2248e5a528ffe0e6fedec4609bc86550287195559a3ba3d",
+    "metrics.json": "392de6716cb29e64a45d218ce547db5667b05e56c257a5da8e8eb426a45c0beb",
     "confusion_matrix.csv": "95523f9a82368f89d55b5bdb2b8f09a86d1e8a101c78b87171a8c9fd79ef3211",
     "network_nodes.csv": "ef0fcff869d79e73d4924bac9a80e299f8c066be193ee12761a380d6601431c5",
     "network_edges.csv": "1fb1d78da704103015cc58fc0fbc1de3ea4412c1a998351da2b5b8d18ac593e9",

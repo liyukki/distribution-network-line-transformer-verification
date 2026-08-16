@@ -1,9 +1,9 @@
 {
-  "run_id": "20260816T071854Z-305edb",
-  "source_run_id": "20260816T071854Z-305edb",
-  "source_manifest_sha256": "199d070cb25868b9e7b3730ee9ec9e02e343d761e7976e518568ed2f6c2e38dc",
+  "run_id": "20260816T083229Z-1c17b5",
+  "source_run_id": "20260816T083229Z-1c17b5",
+  "source_manifest_sha256": "d81cac9e17fc1d7bcb3e196076a6756e63f69e524fe304a92c302c5702c97d1f",
   "artifact_schema_version": 2,
-  "source_git_commit": "b24c9f849af739b93d1178a942c3153923d5a397",
+  "source_git_commit": "94ee059f7ed2071e16a76b8fcbf31c07a0ec7359",
   "config_sha256": "7b966854bb4576ceabf8c7c24d44e0046e536399f4ce20be4d51d5c68dbb04fb",
   "status": "completed",
   "python_version": "3.12.13",
@@ -21,8 +21,11 @@
     "recall": 0.2,
     "f1": 0.16666666666666666,
     "pr_auc": 0.3778787878787879,
+    "pr_auc_applicable": true,
+    "pr_auc_unavailable_reason": null,
     "pr_auc_scored": 0.3778787878787879,
     "pr_auc_scored_applicable": true,
+    "pr_auc_scored_unavailable_reason": null,
     "top1_correction_rate": 0.2,
     "top1_evaluated_count": 5,
     "top1_evaluation_coverage": 1.0,
@@ -37,9 +40,11 @@
       "top2": true,
       "top3": false
     },
+    "excluded_candidate_count": 0,
     "candidate_feeder_count": 3,
     "n_total": 24,
     "n_actual_errors": 5,
+    "n_actual_correct": 19,
     "n_predicted": 7,
     "automatic_coverage": 0.2916666666666667,
     "insufficient_data_rate": 0.0,
@@ -47,7 +52,8 @@
     "base_case_converged": true,
     "base_case_voltage_min_pu": 1.0,
     "base_case_voltage_max_pu": 1.0000534704422537,
-    "base_case_balance_error_mw": 7.459819554250894e-14
+    "base_case_balance_error_mw": 7.459819554250894e-14,
+    "base_case_severity": "ok"
   },
   "baseline_comparison": {
     "precision": 0.0,
@@ -82,7 +88,7 @@
   },
   "artifact_sha256": {
     "predictions.parquet": "434f7ff48a1eda22e74511ac273e2c7a42a9ee8c38de144d4877bd45ba0327d6",
-    "metrics.json": "193f869d2350493bd2248e5a528ffe0e6fedec4609bc86550287195559a3ba3d",
+    "metrics.json": "392de6716cb29e64a45d218ce547db5667b05e56c257a5da8e8eb426a45c0beb",
     "simulation_validation.csv": "0b7926b316666cfeaf16ed61cfff331b151ada7a94e6c3cc9fcd56c90b44f6fc"
   },
   "generated_by": "python -m ltverify report --run-dir <run_dir> --output <output_path>"
