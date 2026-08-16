@@ -11,7 +11,7 @@ from ltverify.manifest import classify_artifact_schema_version, file_sha256
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_delivered_robustness_manifest_is_self_verifying() -> None:
+def test_delivered_robustness_manifest_passes_strict_source_verification() -> None:
     manifest_path = ROOT / "reports/metrics/robustness_experiment_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     verify_experiment_manifest(
@@ -191,3 +191,38 @@ def test_experiment_manifest_rejects_unsafe_output_names(
     manifest["output_files"][unsafe] = "0" * 64
     with pytest.raises(ValueError):
         verify_experiment_manifest(manifest, tmp_path)
+
+
+def test_experiment_manifest_offline_mode_reports_offline_verification() -> None:
+    manifest, artifact_dir = _authoritative_experiment_manifest()
+    tampered = copy.deepcopy(manifest)
+    tampered["experiment_config_snapshot"] = {"forged": True}
+    tampered["base_config_snapshot"] = {"forged": True}
+    tampered["experiment_config_sha256"] = "0" * 64
+    tampered["base_config_sha256"] = "1" * 64
+    level = verify_experiment_manifest(tampered, artifact_dir)
+    assert level == "offline"
+
+
+def test_experiment_manifest_strict_mode_requires_source_configs() -> None:
+    manifest, artifact_dir = _authoritative_experiment_manifest()
+    with pytest.raises(ValueError, match="source|config|严格"):
+        verify_experiment_manifest(
+            manifest,
+            artifact_dir,
+            require_source_configs=True,
+        )
+
+
+def test_experiment_manifest_strict_mode_rejects_forged_snapshot() -> None:
+    manifest, artifact_dir = _authoritative_experiment_manifest()
+    tampered = copy.deepcopy(manifest)
+    tampered["experiment_config_snapshot"] = {"forged": True}
+    with pytest.raises(ValueError, match="snapshot|不一致"):
+        verify_experiment_manifest(
+            tampered,
+            artifact_dir,
+            experiment_config_path=ROOT / "configs/robustness.yaml",
+            base_config_path=ROOT / "configs/default.yaml",
+            require_source_configs=True,
+        )

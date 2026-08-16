@@ -6,6 +6,7 @@ import pytest
 
 from ltverify.manifest import (
     build_manifest,
+    file_sha256,
     validate_portable_relative_path,
     verify_manifest_hashes,
 )
@@ -23,7 +24,11 @@ def test_manifest_contains_reproduction_fields(tmp_path: Path) -> None:
 
 
 def _fake_manifest(paths: list[str], sha: dict[str, str]) -> dict[str, object]:
-    return {"output_paths": paths, "output_sha256": sha}
+    return {
+        "output_paths": paths,
+        "output_sha256": sha,
+        "input_paths": ["default.yaml"],
+    }
 
 
 def test_output_paths_and_sha_keys_must_match_exactly(tmp_path: Path) -> None:
@@ -65,6 +70,52 @@ def test_build_manifest_input_paths_are_portable(tmp_path: Path) -> None:
         assert not Path(value).is_absolute()
 
 
+def _manifest_with_input_paths(input_paths: object) -> dict[str, object]:
+    return {
+        "output_paths": [],
+        "output_sha256": {},
+        "input_paths": input_paths,
+    }
+
+
+@pytest.mark.parametrize(
+    "input_paths",
+    [
+        None,
+        "default.yaml",
+        {"name": "default.yaml"},
+        [1],
+        ["default.yaml", "default.yaml"],
+        [],
+    ],
+)
+def test_verify_manifest_rejects_invalid_input_paths(
+    tmp_path: Path, input_paths: object
+) -> None:
+    manifest = _manifest_with_input_paths(input_paths)
+    with pytest.raises(ValueError, match="input_paths"):
+        verify_manifest_hashes(manifest, tmp_path)
+
+
+def test_verify_manifest_requires_input_paths_field(tmp_path: Path) -> None:
+    manifest = {"output_paths": [], "output_sha256": {}}
+    with pytest.raises(ValueError, match="input_paths"):
+        verify_manifest_hashes(manifest, tmp_path)
+
+
+def test_verify_manifest_accepts_single_input_path(tmp_path: Path) -> None:
+    snapshot = tmp_path / "config.snapshot.yaml"
+    snapshot.write_text("key: value\n", encoding="utf-8")
+    sha = file_sha256(snapshot)
+    manifest = {
+        "output_paths": ["config.snapshot.yaml"],
+        "output_sha256": {"config.snapshot.yaml": sha},
+        "config_sha256": sha,
+        "input_paths": ["default.yaml"],
+    }
+    verify_manifest_hashes(manifest, tmp_path)
+
+
 def test_delivered_default_manifest_paths_are_portable() -> None:
     manifest_path = ROOT / "reports/metrics/default_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -92,3 +143,33 @@ def test_validate_portable_relative_path_rejects_cross_platform_unsafe(
 ) -> None:
     with pytest.raises(ValueError):
         validate_portable_relative_path(unsafe, field="test")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "CON",
+        "con.txt",
+        "AUX",
+        "aux.csv",
+        "NUL",
+        "COM1",
+        "LPT9",
+        "foo:bar.csv",
+        "trailingdot.",
+        "trailingspace ",
+        "nested/aux.txt",
+    ],
+)
+def test_validate_portable_relative_path_rejects_windows_reserved_names(
+    name: str,
+) -> None:
+    with pytest.raises(ValueError):
+        validate_portable_relative_path(name, field="test")
+
+
+def test_validate_portable_relative_path_accepts_normal_nested_path() -> None:
+    assert (
+        validate_portable_relative_path("data/实验结果/robustness_summary.csv", field="test")
+        == "data/实验结果/robustness_summary.csv"
+    )

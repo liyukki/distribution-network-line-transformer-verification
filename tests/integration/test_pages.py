@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -5,6 +6,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from ltverify.data_access import RunArtifacts, load_run_artifacts
+from ltverify.manifest import file_sha256
 from ltverify.pipeline import run_pipeline
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,6 +17,58 @@ DATA_PAGES = [
     "3_similarity.py",
     "4_evaluation.py",
 ]
+
+
+def _valid_aggregates_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "family": ["missing_rate", "missing_rate"],
+            "value": ["0.0", "0.1"],
+            "mean_precision": [0.9, 0.8],
+            "std_precision": [0.05, 0.06],
+            "mean_f1": [0.8, 0.7],
+            "std_f1": [0.04, 0.05],
+        }
+    )
+
+
+def _write_experiment_dir(tmp_path: Path) -> Path:
+    """Create a current-naming experiment dir with a valid offline manifest."""
+    import pandas as pd
+
+    experiment_dir = tmp_path / "experiments-test"
+    experiment_dir.mkdir(parents=True, exist_ok=True)
+    summary = pd.DataFrame(
+        {
+            "case_id": ["a", "b"],
+            "family": ["missing_rate", "missing_rate"],
+            "value": ["0.0", "0.1"],
+            "status": ["completed", "completed"],
+        }
+    )
+    summary_path = experiment_dir / "robustness_summary.csv"
+    summary.to_csv(summary_path, index=False)
+    aggregates_path = experiment_dir / "robustness_aggregates.csv"
+    _valid_aggregates_frame().to_csv(aggregates_path, index=False)
+    manifest = {
+        "artifact_schema_version": 2,
+        "experiment_config_name": "robustness.yaml",
+        "experiment_config_sha256": "0" * 64,
+        "experiment_config_snapshot": {},
+        "base_config_name": "default.yaml",
+        "base_config_sha256": "0" * 64,
+        "base_config_snapshot": {},
+        "case_counts": {"total": 2, "completed": 2, "failed": 0},
+        "output_files": {
+            "robustness_summary.csv": file_sha256(summary_path),
+            "robustness_aggregates.csv": file_sha256(aggregates_path),
+        },
+    }
+    (experiment_dir / "robustness_experiment_manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return experiment_dir
 
 
 def _artifacts_with_schema(
@@ -85,13 +139,14 @@ def test_robustness_page_renders_with_tmp_aggregates(tmp_path: Path) -> None:
             **{f"std_{metric}": [0.05, 0.06] for metric in metrics},
         }
     )
-    csv_path = tmp_path / "robustness_aggregates.csv"
+    csv_path = tmp_path / "experiment_aggregates.csv"
     aggregates.to_csv(csv_path, index=False)
     app_test = AppTest.from_file(
         ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
     )
     app_test.run()
     app_test.text_input[0].set_value(str(csv_path))
+    app_test.text_input[1].set_value("")
     app_test.run()
     raised = [element.value for element in app_test.exception]
     assert len(app_test.exception) == 0, raised
@@ -217,13 +272,14 @@ def test_robustness_page_lists_complete_metrics(tmp_path: Path) -> None:
             **{f"std_{metric}": [0.05, 0.06] for metric in metric_columns},
         }
     )
-    csv_path = tmp_path / "robustness_aggregates.csv"
+    csv_path = tmp_path / "experiment_aggregates.csv"
     aggregates.to_csv(csv_path, index=False)
     app_test = AppTest.from_file(
         ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
     )
     app_test.run()
     app_test.text_input[0].set_value(str(csv_path))
+    app_test.text_input[1].set_value("")
     app_test.run()
     options = list(app_test.selectbox[1].options)
     for metric in ("pr_auc", "pr_auc_scored", "scored_coverage", "insufficient_data_rate"):
@@ -234,6 +290,237 @@ def test_robustness_page_lists_complete_metrics(tmp_path: Path) -> None:
         app_test.run()
         raised = [element.value for element in app_test.exception]
         assert len(app_test.exception) == 0, f"{metric} raised: {raised}"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "value,mean_precision\n0.1,0.8\n",
+        "a,b\n1,2\nbroken",
+        "",
+    ],
+)
+def test_robustness_page_handles_bad_aggregates(
+    tmp_path: Path, content: str
+) -> None:
+    path = tmp_path / "robustness_aggregates.csv"
+    path.write_text(content, encoding="utf-8")
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(path))
+    app_test.text_input[1].set_value("")
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert len(app_test.error) + len(app_test.warning) >= 1
+
+
+def test_robustness_page_handles_non_numeric_metric(tmp_path: Path) -> None:
+    aggregates = _valid_aggregates_frame()
+    aggregates["mean_precision"] = "abc"
+    path = tmp_path / "robustness_aggregates.csv"
+    aggregates.to_csv(path, index=False)
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(path))
+    app_test.text_input[1].set_value("")
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert len(app_test.error) + len(app_test.warning) >= 1
+
+
+def test_robustness_page_rejects_directory_path(tmp_path: Path) -> None:
+    path = tmp_path / "aggregates_dir"
+    path.mkdir()
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(path))
+    app_test.text_input[1].set_value("")
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert len(app_test.error) >= 1
+
+
+def test_robustness_page_handles_legacy_summary_missing_status(
+    tmp_path: Path,
+) -> None:
+    aggregates_path = tmp_path / "experiment_aggregates.csv"
+    _valid_aggregates_frame().to_csv(aggregates_path, index=False)
+    summary_path = tmp_path / "experiment_summary.csv"
+    pd.DataFrame(
+        {"case_id": ["a"], "family": ["x"], "value": ["1"]}
+    ).to_csv(summary_path, index=False)
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(aggregates_path))
+    app_test.run()
+    assert len(app_test.text_input) > 1
+    app_test.text_input[1].set_value(str(summary_path))
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert len(app_test.error) + len(app_test.warning) >= 1
+
+
+def test_robustness_page_rejects_legacy_summary_unknown_status(
+    tmp_path: Path,
+) -> None:
+    aggregates_path = tmp_path / "experiment_aggregates.csv"
+    _valid_aggregates_frame().to_csv(aggregates_path, index=False)
+    summary_path = tmp_path / "experiment_summary.csv"
+    pd.DataFrame(
+        {
+            "case_id": ["a"],
+            "family": ["x"],
+            "value": ["1"],
+            "status": ["mystery"],
+        }
+    ).to_csv(summary_path, index=False)
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(aggregates_path))
+    app_test.run()
+    assert len(app_test.text_input) > 1
+    app_test.text_input[1].set_value(str(summary_path))
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert len(app_test.error) >= 1
+
+
+def test_robustness_page_rejects_tampered_current_artifacts(
+    tmp_path: Path,
+) -> None:
+    experiment_dir = _write_experiment_dir(tmp_path)
+    aggregates_path = experiment_dir / "robustness_aggregates.csv"
+    with aggregates_path.open("a", encoding="utf-8") as handle:
+        handle.write("tampered")
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(aggregates_path))
+    app_test.text_input[1].set_value("")
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert len(app_test.error) >= 1
+    assert len(app_test.get("plotly_chart")) == 0
+
+
+def test_robustness_page_renders_verified_current_artifacts(
+    tmp_path: Path,
+) -> None:
+    experiment_dir = _write_experiment_dir(tmp_path)
+    aggregates_path = experiment_dir / "robustness_aggregates.csv"
+    summary_path = experiment_dir / "robustness_summary.csv"
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(aggregates_path))
+    app_test.text_input[1].set_value(str(summary_path))
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert len(app_test.get("plotly_chart")) >= 1
+    assert len(app_test.warning) >= 1
+
+
+def test_robustness_page_rejects_tampered_current_summary(
+    tmp_path: Path,
+) -> None:
+    experiment_dir = _write_experiment_dir(tmp_path)
+    summary_path = experiment_dir / "robustness_summary.csv"
+    with summary_path.open("a", encoding="utf-8") as handle:
+        handle.write("tampered")
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(experiment_dir / "robustness_aggregates.csv"))
+    app_test.text_input[1].set_value(str(summary_path))
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert len(app_test.error) >= 1
+    assert len(app_test.get("plotly_chart")) == 0
+
+
+def test_robustness_page_rejects_invalid_current_manifest_json(
+    tmp_path: Path,
+) -> None:
+    experiment_dir = _write_experiment_dir(tmp_path)
+    (experiment_dir / "robustness_experiment_manifest.json").write_text(
+        "{not json", encoding="utf-8"
+    )
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(experiment_dir / "robustness_aggregates.csv"))
+    app_test.text_input[1].set_value("")
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert len(app_test.error) >= 1
+    assert len(app_test.get("plotly_chart")) == 0
+
+
+def test_robustness_page_rejects_current_manifest_missing_core_hash(
+    tmp_path: Path,
+) -> None:
+    import json as json_module
+
+    experiment_dir = _write_experiment_dir(tmp_path)
+    manifest_path = experiment_dir / "robustness_experiment_manifest.json"
+    manifest = json_module.loads(manifest_path.read_text(encoding="utf-8"))
+    del manifest["output_files"]["robustness_aggregates.csv"]
+    manifest_path.write_text(
+        json_module.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(experiment_dir / "robustness_aggregates.csv"))
+    app_test.text_input[1].set_value("")
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert len(app_test.error) >= 1
+    assert len(app_test.get("plotly_chart")) == 0
+
+
+def test_robustness_page_legacy_shows_unverified_warning(
+    tmp_path: Path,
+) -> None:
+    aggregates_path = tmp_path / "experiment_aggregates.csv"
+    _valid_aggregates_frame().to_csv(aggregates_path, index=False)
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(aggregates_path))
+    app_test.text_input[1].set_value("")
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    warnings = [element.value for element in app_test.warning]
+    assert any("未经验签" in text for text in warnings)
 
 
 def test_schema_three_state_branches(run_dir: Path) -> None:
