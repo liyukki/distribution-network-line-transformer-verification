@@ -429,8 +429,15 @@ def verify_experiment_manifest(
     *,
     experiment_config_path: Path | None = None,
     base_config_path: Path | None = None,
-) -> None:
+    require_source_configs: bool = False,
+) -> str:
     """Verify a robustness experiment manifest against its artifact dir.
+
+    Returns ``"strict"`` when both original source config paths were
+    provided and name/hash/snapshot all cross-check successfully; returns
+    ``"offline"`` when only artifact/schema/count verification is
+    performed. Offline mode cannot prove the embedded snapshots came from
+    the original YAML/config files.
 
     Checks schema, safe relative output paths, 64-hex hashes, file
     existence and byte equality, config hashes against the embedded
@@ -438,6 +445,12 @@ def verify_experiment_manifest(
     caller provides the original config paths, their file hashes must
     equal the recorded hashes.
     """
+    if require_source_configs and (
+        experiment_config_path is None or base_config_path is None
+    ):
+        raise ValueError(
+            "严格验证需要同时提供 experiment_config_path 和 base_config_path"
+        )
     artifact_dir = Path(artifact_dir)
     schema = manifest.get("artifact_schema_version")
     if not isinstance(schema, int) or isinstance(schema, bool) or schema != 2:
@@ -476,6 +489,9 @@ def verify_experiment_manifest(
             raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
                 f"experiment manifest 缺少 {key} 字典"
             )
+    strict_verified = False
+    if experiment_config_path is not None and base_config_path is not None:
+        strict_verified = True
     if experiment_config_path is not None:
         path = Path(experiment_config_path)
         if path.name != manifest["experiment_config_name"]:
@@ -552,3 +568,4 @@ def verify_experiment_manifest(
             f"completed {completed} != {actual_completed}，"
             f"failed {failed} != {actual_failed}"
         )
+    return "strict" if strict_verified else "offline"
