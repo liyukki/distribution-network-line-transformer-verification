@@ -29,6 +29,12 @@ class ValidationConfig(BaseModel):
     power_balance_tolerance_mw: float = Field(default=1e-6, gt=0.0)
     transformer_loading_limit_percent: float = Field(default=100.0, gt=0.0)
     terminate_on_critical: bool = True
+    critical_violation_types: tuple[str, ...] = (
+        "non_convergence",
+        "power_balance",
+        "voltage_out_of_bounds",
+        "transformer_overload",
+    )
 
     @model_validator(mode="after")
     def ordered_limits(self) -> "ValidationConfig":

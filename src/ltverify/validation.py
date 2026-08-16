@@ -75,36 +75,41 @@ def check_solved_network(
     messages: list[str] = []
     severities: list[str] = []
 
+    def record(violation_type: str, message: str) -> None:
+        violation_types.append(violation_type)
+        messages.append(message)
+        severities.append(
+            "critical"
+            if violation_type in cfg.critical_violation_types
+            else "warning"
+        )
+
     if voltage_min_pu < cfg.voltage_min_pu:
-        violation_types.append("voltage_out_of_bounds")
-        messages.append(
+        record(
+            "voltage_out_of_bounds",
             f"voltage below {cfg.voltage_min_pu} p.u.: "
-            f"minimum {voltage_min_pu:.4f} p.u."
+            f"minimum {voltage_min_pu:.4f} p.u.",
         )
-        severities.append("warning")
     if voltage_max_pu > cfg.voltage_max_pu:
-        violation_types.append("voltage_out_of_bounds")
-        messages.append(
+        record(
+            "voltage_out_of_bounds",
             f"voltage above {cfg.voltage_max_pu} p.u.: "
-            f"maximum {voltage_max_pu:.4f} p.u."
+            f"maximum {voltage_max_pu:.4f} p.u.",
         )
-        severities.append("warning")
     if balance_error >= cfg.power_balance_tolerance_mw:
-        violation_types.append("power_balance")
-        messages.append(
+        record(
+            "power_balance",
             f"power balance error {balance_error:.3e} MW at or above "
-            f"{cfg.power_balance_tolerance_mw:g} MW"
+            f"{cfg.power_balance_tolerance_mw:g} MW",
         )
-        severities.append("critical")
     overloaded = net.res_trafo[
         net.res_trafo.loading_percent > cfg.transformer_loading_limit_percent
     ]
     for index, loading in zip(overloaded.index, overloaded.loading_percent):
-        violation_types.append("transformer_overload")
-        messages.append(
-            f"transformer overload: trafo {int(index)} at {loading:.1f}%"
+        record(
+            "transformer_overload",
+            f"transformer overload: trafo {int(index)} at {loading:.1f}%",
         )
-        severities.append("warning")
 
     if "critical" in severities:
         severity = "critical"
@@ -113,13 +118,14 @@ def check_solved_network(
     else:
         severity = "ok"
 
+    deduplicated_types = tuple(dict.fromkeys(violation_types))
     return NetworkResultCheck(
         converged=True,
         voltage_min_pu=voltage_min_pu,
         voltage_max_pu=voltage_max_pu,
         maximum_transformer_loading_percent=maximum_loading,
         absolute_power_balance_error_mw=balance_error,
-        violation_types=tuple(violation_types),
+        violation_types=deduplicated_types,
         messages=tuple(messages),
         severity=severity,
     )

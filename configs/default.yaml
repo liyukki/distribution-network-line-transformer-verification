@@ -19,6 +19,11 @@ validation:
   power_balance_tolerance_mw: 0.000001
   transformer_loading_limit_percent: 100.0
   terminate_on_critical: true
+  critical_violation_types:
+    - non_convergence
+    - power_balance
+    - voltage_out_of_bounds
+    - transformer_overload
 corruption:
   ledger_error_rate: 0.20
   voltage_noise_std_pu: 0.0005
