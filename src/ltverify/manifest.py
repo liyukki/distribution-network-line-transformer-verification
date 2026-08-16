@@ -31,7 +31,7 @@ class RunManifest(BaseModel):
     failure_summary: dict[str, str] | None = None
 
 
-def _git_commit() -> str | None:
+def git_commit() -> str | None:
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -44,7 +44,7 @@ def _git_commit() -> str | None:
         return None
 
 
-def _package_versions() -> dict[str, str]:
+def package_versions() -> dict[str, str]:
     resolved: dict[str, str] = {}
     for name in _PACKAGES:
         try:
@@ -63,9 +63,9 @@ def build_manifest(config_path: Path, run_dir: Path) -> RunManifest:
         run_id=run_id,
         started_at_utc=now,
         config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(),
-        git_commit=_git_commit(),
+        git_commit=git_commit(),
         python_version=platform.python_version(),
-        package_versions=_package_versions(),
+        package_versions=package_versions(),
         random_seed=config.random_seed,
         input_paths=[str(config_path)],
         output_paths=[],

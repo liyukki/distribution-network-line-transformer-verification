@@ -154,8 +154,23 @@ def pr_curve_figure(precision: list[float], recall: list[float]) -> go.Figure:
 def robustness_line_figure(
     summary: pd.DataFrame, family: str, metric: str
 ) -> go.Figure:
-    """Mean plus/minus one sample standard deviation across experiment levels."""
+    """Mean plus/minus one sample standard deviation across experiment levels.
+
+    Requires the aggregate product (experiment_aggregates.csv); the raw
+    experiment_summary.csv lacks the mean_*/std_* columns and is rejected
+    with an explicit error. Numeric level values are ordered numerically.
+    """
+    required = {"family", "value", f"mean_{metric}", f"std_{metric}"}
+    missing = sorted(required - set(summary.columns))
+    if missing:
+        raise ValueError(
+            f"robustness_line_figure 缺少列: {missing}；"
+            "请传入实验聚合产物 experiment_aggregates.csv（而非原始案例表 experiment_summary.csv）"
+        )
     rows = summary[summary["family"] == family]
+    numeric = pd.to_numeric(rows["value"].astype(str), errors="coerce")
+    if numeric.notna().all():
+        rows = rows.loc[numeric.sort_values().index]
     values = rows["value"].astype(str)
     means = rows[f"mean_{metric}"].to_numpy(dtype=float)
     stds = rows[f"std_{metric}"].to_numpy(dtype=float)

@@ -13,9 +13,14 @@ SUMMARY_COLUMNS = [
     "recall",
     "f1",
     "top1_correction_rate",
-    "top3_correction_rate",
+    "top2_correction_rate",
     "automatic_coverage",
     "runtime_seconds",
+    "convergence_rate",
+    "violation_count",
+    "voltage_min_pu",
+    "voltage_max_pu",
+    "maximum_transformer_loading_percent",
     "status",
 ]
 

@@ -3,11 +3,17 @@
 One factor at a time around the default base case; ablations disable one
 feature group at a time by zeroing its score weight. Clean simulation
 artifacts are cached by (seed, pv_scale) so all cases sharing physical
-data reuse the same power-flow results.
+data reuse the same power-flow results. Cases with simulation failures or
+critical physical violations are recorded as failed, never silently
+counted as completed. Every run writes an experiment_manifest.json with
+configuration, environment and output hashes.
 """
 
+import hashlib
+import platform
 import time
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -17,6 +23,8 @@ from ltverify.config import load_config
 from ltverify.corruption import build_truth, corrupt_ledger, disturb_measurements
 from ltverify.evaluation import evaluate_predictions
 from ltverify.features import build_candidate_features
+from ltverify.io import write_json_atomic
+from ltverify.manifest import git_commit, package_versions
 from ltverify.network import build_network
 from ltverify.preprocessing import prepare_measurements
 from ltverify.profiles import generate_profiles
@@ -59,9 +67,17 @@ _METRIC_COLUMNS = (
     "recall",
     "f1",
     "top1_correction_rate",
-    "top3_correction_rate",
+    "top2_correction_rate",
     "automatic_coverage",
     "runtime_seconds",
+)
+
+_PHYSICAL_COLUMNS = (
+    "convergence_rate",
+    "violation_count",
+    "voltage_min_pu",
+    "voltage_max_pu",
+    "maximum_transformer_loading_percent",
 )
 
 SUMMARY_COLUMNS = [
@@ -70,6 +86,7 @@ SUMMARY_COLUMNS = [
     "value",
     "seed",
     *_METRIC_COLUMNS,
+    *_PHYSICAL_COLUMNS,
     "status",
     "error_type",
     "error_message",
@@ -143,7 +160,7 @@ def _run_case(
     case: ExperimentCase,
     base_config: object,
     cache: dict[tuple[int, float], tuple[object, object, object]],
-) -> dict[str, float | int]:
+) -> tuple[dict[str, float | int], dict[str, float | int]]:
     config = base_config.model_copy(deep=True)
     _apply_overrides(config, case.config_overrides)
     seed = case.seed
@@ -194,7 +211,27 @@ def _run_case(
     scored = score_candidates(features, _weights_for(case.enabled_features))
     predictions = diagnose(scored, ledger, config.scoring)
     result = evaluate_predictions(predictions, truth, ledger, scored)
-    return result.metrics
+
+    validation = simulation.validation
+    if len(validation):
+        physical = {
+            "convergence_rate": float(validation["converged"].mean()),
+            "violation_count": int((validation["severity"] != "ok").sum()),
+            "voltage_min_pu": float(validation["voltage_min_pu"].min()),
+            "voltage_max_pu": float(validation["voltage_max_pu"].max()),
+            "maximum_transformer_loading_percent": float(
+                validation["maximum_transformer_loading_percent"].max()
+            ),
+        }
+    else:
+        physical = {
+            "convergence_rate": float("nan"),
+            "violation_count": 0,
+            "voltage_min_pu": float("nan"),
+            "voltage_max_pu": float("nan"),
+            "maximum_transformer_loading_percent": float("nan"),
+        }
+    return result.metrics, physical
 
 
 def _aggregate(summary: pd.DataFrame) -> pd.DataFrame:
@@ -210,7 +247,7 @@ def _aggregate(summary: pd.DataFrame) -> pd.DataFrame:
             "n_completed": len(succeeded),
             "failure_count": int((group["status"] == "failed").sum()),
         }
-        for metric in _METRIC_COLUMNS:
+        for metric in _METRIC_COLUMNS + _PHYSICAL_COLUMNS:
             if len(succeeded):
                 row[f"mean_{metric}"] = float(succeeded[metric].mean())
                 row[f"std_{metric}"] = float(succeeded[metric].std(ddof=1))
@@ -221,18 +258,23 @@ def _aggregate(summary: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(aggregates)
 
 
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def run_experiments(path: Path, output_dir: Path) -> Path:
-    """Run every case, write raw and aggregated summaries, return the dir."""
+    """Run every case, write summaries and a manifest, return the dir."""
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     base_config = load_config(Path(raw["base_config"]))
     cases = expand_experiment_grid(path)
     output_dir.mkdir(parents=True, exist_ok=True)
     cache: dict[tuple[int, float], tuple[object, object, object]] = {}
     rows: list[dict[str, object]] = []
+    started_at_utc = datetime.now(UTC)
     for case in cases:
         started = time.perf_counter()
         try:
-            metrics = _run_case(case, base_config, cache)
+            metrics, physical = _run_case(case, base_config, cache)
             rows.append(
                 {
                     "case_id": case.case_id,
@@ -240,6 +282,7 @@ def run_experiments(path: Path, output_dir: Path) -> Path:
                     "value": case.value,
                     "seed": case.seed,
                     **{metric: metrics.get(metric, float("nan")) for metric in _METRIC_COLUMNS},
+                    **physical,
                     "status": "completed",
                     "error_type": "",
                     "error_message": "",
@@ -253,6 +296,7 @@ def run_experiments(path: Path, output_dir: Path) -> Path:
                     "value": case.value,
                     "seed": case.seed,
                     **{metric: float("nan") for metric in _METRIC_COLUMNS},
+                    **{column: float("nan") for column in _PHYSICAL_COLUMNS},
                     "status": "failed",
                     "error_type": type(exc).__name__,
                     "error_message": str(exc),
@@ -263,4 +307,30 @@ def run_experiments(path: Path, output_dir: Path) -> Path:
     summary.to_csv(output_dir / "experiment_summary.csv", index=False)
     aggregates = _aggregate(summary)
     aggregates.to_csv(output_dir / "experiment_aggregates.csv", index=False)
+
+    manifest = {
+        "experiment_config_path": str(path),
+        "experiment_config_sha256": _file_sha256(path),
+        "base_config_path": raw.get("base_config"),
+        "config_snapshot": raw,
+        "git_commit": git_commit(),
+        "python_version": platform.python_version(),
+        "package_versions": package_versions(),
+        "started_at_utc": started_at_utc.isoformat(),
+        "finished_at_utc": datetime.now(UTC).isoformat(),
+        "case_counts": {
+            "total": len(cases),
+            "completed": int((summary["status"] == "completed").sum()),
+            "failed": int((summary["status"] == "failed").sum()),
+        },
+        "output_files": {
+            "experiment_summary.csv": _file_sha256(
+                output_dir / "experiment_summary.csv"
+            ),
+            "experiment_aggregates.csv": _file_sha256(
+                output_dir / "experiment_aggregates.csv"
+            ),
+        },
+    }
+    write_json_atomic(manifest, output_dir / "experiment_manifest.json")
     return output_dir
