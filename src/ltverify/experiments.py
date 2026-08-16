@@ -107,8 +107,14 @@ SUMMARY_COLUMNS = [
     "error_message",
 ]
 
+CURRENT_AGGREGATES_NAME = "robustness_aggregates.csv"
+CURRENT_SUMMARY_NAME = "robustness_summary.csv"
+CURRENT_MANIFEST_NAME = "robustness_experiment_manifest.json"
+LEGACY_AGGREGATES_NAME = "experiment_aggregates.csv"
+LEGACY_SUMMARY_NAME = "experiment_summary.csv"
+
 REQUIRED_EXPERIMENT_OUTPUTS = frozenset(
-    {"robustness_summary.csv", "robustness_aggregates.csv"}
+    {CURRENT_SUMMARY_NAME, CURRENT_AGGREGATES_NAME}
 )
 
 
@@ -450,6 +456,10 @@ def verify_experiment_manifest(
     ):
         raise ValueError(
             "严格验证需要同时提供 experiment_config_path 和 base_config_path"
+        )
+    if not isinstance(manifest, dict):
+        raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
+            "实验清单顶层必须是 JSON object"
         )
     artifact_dir = Path(artifact_dir)
     schema = manifest.get("artifact_schema_version")

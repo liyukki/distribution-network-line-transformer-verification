@@ -16,9 +16,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+import numpy as np
 import pandas as pd
 
-from ltverify.experiments import verify_experiment_manifest
+from ltverify.experiments import (
+    CURRENT_AGGREGATES_NAME,
+    CURRENT_MANIFEST_NAME,
+    CURRENT_SUMMARY_NAME,
+    LEGACY_AGGREGATES_NAME,
+    LEGACY_SUMMARY_NAME,
+    verify_experiment_manifest,
+)
 from ltverify.io import read_json
 
 VerificationState = Literal[
@@ -61,7 +69,7 @@ def _read_csv_safely(path: Path) -> pd.DataFrame:
         ) from exc
 
 
-def _validate_aggregates(frame: pd.DataFrame) -> None:
+def _normalize_aggregates(frame: pd.DataFrame) -> pd.DataFrame:
     if frame.empty:
         raise RobustnessLoadError("聚合 CSV 为空")
     missing = sorted({"family", "value"} - set(frame.columns))
@@ -69,8 +77,38 @@ def _validate_aggregates(frame: pd.DataFrame) -> None:
         raise RobustnessLoadError(
             f"聚合 CSV 缺少必要列: {missing}"
         )
-    if frame["family"].dropna().astype(str).str.strip().eq("").all():
-        raise RobustnessLoadError("聚合 CSV 的 family 列没有可用取值")
+    if frame["family"].isna().any():
+        raise RobustnessLoadError("聚合 CSV 的 family 列含缺失值")
+    family = frame["family"].astype(str).str.strip()
+    if family.eq("").any():
+        raise RobustnessLoadError("聚合 CSV 的 family 列含空白值")
+    if frame["value"].isna().any():
+        raise RobustnessLoadError("聚合 CSV 的 value 列含缺失值")
+    value = frame["value"].astype(str).str.strip()
+    if value.eq("").any():
+        raise RobustnessLoadError("聚合 CSV 的 value 列含空白值")
+
+    normalized = frame.copy()
+    normalized["family"] = family.to_numpy()
+    normalized["value"] = value.to_numpy()
+
+    for column in normalized.columns:
+        if not column.startswith(("mean_", "std_")):
+            continue
+        converted = pd.to_numeric(normalized[column], errors="coerce")
+        non_null_original = normalized[column].notna()
+        if converted[non_null_original].isna().any():
+            raise RobustnessLoadError(f"{column} 含非数值")
+        if converted.notna().any():
+            finite = np.isfinite(
+                converted[converted.notna()].to_numpy(dtype=float)
+            )
+            if not finite.all():
+                raise RobustnessLoadError(f"{column} 含非有限数值")
+            if column.startswith("std_") and (converted < 0).any():
+                raise RobustnessLoadError(f"{column} 含负标准差")
+        normalized[column] = converted
+    return normalized
 
 
 def _validate_summary(frame: pd.DataFrame) -> None:
@@ -113,98 +151,131 @@ def load_robustness_artifacts(
                 "aggregates 与 summary 必须来自同一实验目录"
             )
 
-    if aggregates_path.name.startswith("robustness_"):
-        artifact_dir = aggregates_path.parent
-        manifest_path = artifact_dir / "robustness_experiment_manifest.json"
-        if not manifest_path.is_file():
-            raise RobustnessLoadError(
-                "当前命名产物缺少 robustness_experiment_manifest.json，"
-                "无法验签；请使用旧命名或重新生成实验"
-            )
-        try:
-            manifest = read_json(manifest_path)
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            raise RobustnessLoadError(
-                f"实验清单解析失败: {exc}"
-            ) from exc
-
-        if resolved_summary is not None and (
-            resolved_summary.parent.resolve() != artifact_dir.resolve()
-        ):
-            raise RobustnessLoadError(
-                "当前命名产物要求 aggregates 与 summary 位于同一目录"
-            )
-        effective_summary = (
-            resolved_summary
-            if resolved_summary is not None
-            else artifact_dir / "robustness_summary.csv"
+    if aggregates_path.name == CURRENT_AGGREGATES_NAME:
+        return _load_current(
+            aggregates_path,
+            resolved_summary,
+            experiment_config_path=experiment_config_path,
+            base_config_path=base_config_path,
         )
+
+    if aggregates_path.name == LEGACY_AGGREGATES_NAME:
+        return _load_legacy(aggregates_path, resolved_summary)
+
+    raise RobustnessLoadError(
+        "无法识别实验产物文件名，必须精确使用 "
+        f"{CURRENT_AGGREGATES_NAME} 或 {LEGACY_AGGREGATES_NAME}"
+    )
+
+
+def _load_current(
+    aggregates_path: Path,
+    resolved_summary: Path | None,
+    *,
+    experiment_config_path: Path | None,
+    base_config_path: Path | None,
+) -> RobustnessArtifacts:
+    if resolved_summary is not None and (
+        resolved_summary.name != CURRENT_SUMMARY_NAME
+    ):
+        raise RobustnessLoadError(
+            f"当前命名 aggregate 必须搭配 {CURRENT_SUMMARY_NAME}"
+        )
+    artifact_dir = aggregates_path.parent
+    manifest_path = artifact_dir / CURRENT_MANIFEST_NAME
+    if not manifest_path.is_file():
+        raise RobustnessLoadError(
+            f"当前命名产物缺少 {CURRENT_MANIFEST_NAME}，"
+            "无法验签；请使用旧命名或重新生成实验"
+        )
+    try:
+        manifest = read_json(manifest_path)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RobustnessLoadError(
+            f"实验清单解析失败: {exc}"
+        ) from exc
+    if not isinstance(manifest, dict):
+        raise RobustnessLoadError("实验清单顶层必须是 JSON object")
+
+    effective_summary = (
+        resolved_summary
+        if resolved_summary is not None
+        else artifact_dir / CURRENT_SUMMARY_NAME
+    )
+    if effective_summary.name != CURRENT_SUMMARY_NAME:
+        raise RobustnessLoadError(
+            f"当前命名 summary 必须是 {CURRENT_SUMMARY_NAME}"
+        )
+
+    try:
+        verify_experiment_manifest(
+            manifest,
+            artifact_dir,
+            require_source_configs=False,
+        )
+    except (ValueError, TypeError) as exc:
+        raise RobustnessLoadError(
+            f"实验产物验签失败: {exc}"
+        ) from exc
+
+    aggregates = _normalize_aggregates(_read_csv_safely(aggregates_path))
+    summary: pd.DataFrame | None = None
+    if effective_summary.exists():
+        summary = _read_csv_safely(effective_summary)
+        _validate_summary(summary)
+
+    strict_message = ""
+    if experiment_config_path is not None and base_config_path is not None:
         try:
             verify_experiment_manifest(
                 manifest,
                 artifact_dir,
-                require_source_configs=False,
+                experiment_config_path=experiment_config_path,
+                base_config_path=base_config_path,
+                require_source_configs=True,
             )
-        except (ValueError, TypeError) as exc:
-            raise RobustnessLoadError(
-                f"实验产物验签失败: {exc}"
-            ) from exc
-
-        aggregates = _read_csv_safely(aggregates_path)
-        _validate_aggregates(aggregates)
-
-        summary: pd.DataFrame | None = None
-        if effective_summary.exists():
-            summary = _read_csv_safely(effective_summary)
-            _validate_summary(summary)
-
-        strict_message = ""
-        if experiment_config_path is not None and base_config_path is not None:
-            try:
-                verify_experiment_manifest(
-                    manifest,
-                    artifact_dir,
-                    experiment_config_path=experiment_config_path,
-                    base_config_path=base_config_path,
-                    require_source_configs=True,
-                )
-                return RobustnessArtifacts(
-                    aggregates,
-                    summary,
-                    "strict_verified",
-                    "已完成严格源配置核验（name/hash/snapshot 全部一致）",
-                )
-            except (ValueError, TypeError) as exc:
-                strict_message = str(exc)
-
-        if strict_message:
             return RobustnessArtifacts(
                 aggregates,
                 summary,
-                "artifact_hashes_verified",
-                f"产物哈希已验证，但源配置未交叉核验：{strict_message}",
+                "strict_verified",
+                "已完成严格源配置核验（name/hash/snapshot 全部一致）",
             )
+        except (ValueError, TypeError) as exc:
+            strict_message = str(exc)
+
+    if strict_message:
         return RobustnessArtifacts(
             aggregates,
             summary,
             "artifact_hashes_verified",
-            "产物哈希已验证（离线模式）",
+            f"产物哈希已验证，但源配置未交叉核验：{strict_message}",
         )
+    return RobustnessArtifacts(
+        aggregates,
+        summary,
+        "artifact_hashes_verified",
+        "产物哈希已验证（离线模式）",
+    )
 
-    if aggregates_path.name.startswith("experiment_"):
-        aggregates = _read_csv_safely(aggregates_path)
-        _validate_aggregates(aggregates)
-        summary = None
-        if resolved_summary is not None:
-            summary = _read_csv_safely(resolved_summary)
-            _validate_summary(summary)
-        return RobustnessArtifacts(
-            aggregates,
-            summary,
-            "legacy_unverified",
-            "旧命名实验产物未经验签，仅供兼容展示",
+
+def _load_legacy(
+    aggregates_path: Path,
+    resolved_summary: Path | None,
+) -> RobustnessArtifacts:
+    if resolved_summary is not None and (
+        resolved_summary.name != LEGACY_SUMMARY_NAME
+    ):
+        raise RobustnessLoadError(
+            f"旧命名 aggregate 必须搭配 {LEGACY_SUMMARY_NAME}"
         )
-
-    raise RobustnessLoadError(
-        "无法识别实验产物命名，请使用 robustness_* 或 experiment_* 前缀"
+    aggregates = _normalize_aggregates(_read_csv_safely(aggregates_path))
+    summary: pd.DataFrame | None = None
+    if resolved_summary is not None:
+        summary = _read_csv_safely(resolved_summary)
+        _validate_summary(summary)
+    return RobustnessArtifacts(
+        aggregates,
+        summary,
+        "legacy_unverified",
+        "旧命名实验产物未经验签，仅供兼容展示",
     )

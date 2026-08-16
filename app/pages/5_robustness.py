@@ -3,6 +3,13 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from ltverify.experiments import (
+    CURRENT_AGGREGATES_NAME,
+    CURRENT_MANIFEST_NAME,
+    CURRENT_SUMMARY_NAME,
+    LEGACY_AGGREGATES_NAME,
+    LEGACY_SUMMARY_NAME,
+)
 from ltverify.plotting import robustness_line_figure
 from ltverify.robustness_loader import RobustnessLoadError, load_robustness_artifacts
 
@@ -14,22 +21,35 @@ st.title("鲁棒性实验")
 
 
 def _default_experiment_paths() -> tuple[str, str]:
-    """Pick one experiment directory and return its aggregate and summary paths.
+    """Pick a structurally complete experiment directory.
 
-    New ``robustness_*`` naming is preferred globally; legacy
-    ``experiment_*`` is used only when no new-named aggregate exists. Both
-    paths always come from the same directory to avoid mixing partial
-    experiment outputs.
+    New ``robustness_*`` naming is preferred globally. A current candidate
+    must have aggregates, summary, and manifest all present as regular
+    files; legacy candidates need the exact legacy aggregate name and, if a
+    summary exists, the exact legacy summary name. Content hashes are not
+    checked here; the loader performs verification.
     """
     directories = sorted(Path("runs").glob("experiments-*"), reverse=True)
-    for prefix in ("robustness_", "experiment_"):
-        for directory in directories:
-            aggregates = directory / f"{prefix}aggregates.csv"
-            if aggregates.exists():
-                summary = directory / f"{prefix}summary.csv"
-                return str(aggregates), (
-                    str(summary) if summary.exists() else ""
-                )
+    for directory in directories:
+        aggregates = directory / CURRENT_AGGREGATES_NAME
+        summary = directory / CURRENT_SUMMARY_NAME
+        manifest = directory / CURRENT_MANIFEST_NAME
+        if (
+            aggregates.is_file()
+            and summary.is_file()
+            and manifest.is_file()
+        ):
+            return str(aggregates), str(summary)
+    for directory in directories:
+        aggregates = directory / LEGACY_AGGREGATES_NAME
+        if not aggregates.is_file():
+            continue
+        summary = directory / LEGACY_SUMMARY_NAME
+        if summary.exists() and not summary.is_file():
+            continue
+        return str(aggregates), (
+            str(summary) if summary.is_file() else ""
+        )
     return "", ""
 
 
@@ -111,13 +131,13 @@ if mean_column not in aggregates.columns:
     st.stop()
 numeric = pd.to_numeric(aggregates[mean_column], errors="coerce")
 if not numeric.notna().any():
-    st.error(f"{metric} 不适用：{mean_column} 不是可用数值列")
+    if aggregates[mean_column].notna().any():
+        st.error(f"{metric} 不适用：{mean_column} 不是可用数值列")
+    else:
+        st.info(f"{metric} 不适用：{mean_column} 全为空值")
     st.stop()
 aggregates = aggregates.copy()
 aggregates[mean_column] = numeric
-if aggregates[mean_column].isna().all():
-    st.info(f"{metric} 不适用：所有聚合样本为空值")
-    st.stop()
 try:
     figure = robustness_line_figure(aggregates, family, metric)
 except ValueError as exc:
