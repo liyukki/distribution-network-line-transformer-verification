@@ -218,7 +218,7 @@ def _load_current(
             artifact_dir,
             require_source_configs=False,
         )
-    except (ValueError, TypeError) as exc:
+    except (ValueError, TypeError, OSError, UnicodeError) as exc:
         raise RobustnessLoadError(
             f"实验产物哈希一致性校验失败: {exc}"
         ) from exc
@@ -244,7 +244,7 @@ def _load_current(
                 "strict_verified",
                 "已完成严格源配置核验（name/hash/snapshot 全部一致）",
             )
-        except (ValueError, TypeError) as exc:
+        except (ValueError, TypeError, OSError, UnicodeError) as exc:
             strict_message = str(exc)
 
     if strict_message:
