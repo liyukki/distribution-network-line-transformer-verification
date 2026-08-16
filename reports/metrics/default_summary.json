@@ -1,7 +1,8 @@
 {
-  "run_id": "20260815T170948Z-429689",
-  "config_sha256": "612aa0177484c16af23275a05aec956d0bf74df769b644142b9c9557f66be03d",
-  "git_commit": "4f6b77c34cb5ea2f8998014d605da04ec83bd076",
+  "run_id": "20260816T061442Z-6df94d",
+  "manifest_path": "D:\\电力\\runs\\run-20260816T061442-91e44475-7efe30\\manifest.json",
+  "config_sha256": "91e44475ac0e69b6d0b1312110ca9fbd2ccf823ddd1c3d3455e7e3acc497bfff",
+  "git_commit": "f233da79bb36c76ae3699e2ea59755d58c71b472",
   "status": "completed",
   "python_version": "3.12.13",
   "package_versions": {
@@ -14,31 +15,43 @@
   },
   "seed": 42,
   "metrics": {
-    "precision": 0.1111111111111111,
+    "precision": 0.14285714285714285,
     "recall": 0.2,
-    "f1": 0.14285714285714285,
-    "pr_auc": 0.1888888888888889,
-    "top1_correction_rate": 0.0,
-    "top3_correction_rate": 1.0,
+    "f1": 0.16666666666666666,
+    "pr_auc": 0.3778787878787879,
+    "top1_correction_rate": 0.2,
+    "top2_correction_rate": 0.4,
+    "top3_correction_rate": null,
+    "topk_applicable": {
+      "top1": true,
+      "top2": true,
+      "top3": false
+    },
+    "candidate_feeder_count": 3,
     "n_total": 24,
     "n_actual_errors": 5,
-    "n_predicted": 9,
-    "automatic_coverage": 0.375,
+    "n_predicted": 7,
+    "automatic_coverage": 0.2916666666666667,
     "insufficient_data_rate": 0.0,
-    "static_converged": true,
-    "static_voltage_min_pu": 1.0,
-    "static_voltage_max_pu": 1.0000534704422537,
-    "static_balance_error_mw": 7.459819554250894e-14
+    "scored_coverage": 1.0,
+    "base_case_converged": true,
+    "base_case_voltage_min_pu": 1.0,
+    "base_case_voltage_max_pu": 1.0000534704422537,
+    "base_case_balance_error_mw": 7.459819554250894e-14
   },
   "baseline_comparison": {
-    "baseline_f1": 0.0,
-    "baseline_precision": 0.0,
-    "baseline_recall": 0.0,
-    "baseline_pr_auc": 0.2083,
-    "enhanced_f1": 0.1429,
-    "enhanced_precision": 0.1111,
-    "enhanced_recall": 0.2,
-    "enhanced_pr_auc": 0.1889
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "pr_auc": 0.26255411255411254,
+    "top1_correction_rate": 0.2,
+    "top2_correction_rate": 0.4
   },
-  "finding": "默认参数化下同馈线与跨馈线电压残差相关均值分别为 -0.008 与 -0.021，馈线级电压共享分量约 2e-4 p.u.，远小于配变自身阻抗压降约 4e-3 p.u. 与量测噪声 5e-4 p.u.，电压特征无法区分馈线；增强方法优于基线但远低于研究目标，失败边界已如实记录"
+  "failure_boundary": {
+    "same_feeder_residual_corr_mean": -0.06369757055785014,
+    "cross_feeder_residual_corr_mean": 0.008748460335166117,
+    "same_feeder_pair_count": 84,
+    "cross_feeder_pair_count": 192
+  },
+  "generated_by": "python -m ltverify report --run-dir <run_dir> --output <output_path>"
 }

@@ -87,7 +87,15 @@ python -m ltverify experiments --config configs/robustness.yaml
 
 **物理检查说明**：零负荷网络的 base-case 检查只证明拓扑可解（收敛、电压与平衡基线）；逐时刻校验（每时刻收敛、电压范围、变压器负载率、功率平衡）由时序仿真记录并随运行产物输出。
 
-指标口径已随二审整改更新（PR-AUC 使用连续 anomaly_score、Top-3 在三馈线场景标记为不适用）。整改后的实测数字将在重新运行默认流水线与实验矩阵后由 report 命令生成并填入本节。
+**默认 30 天流水线**（运行 ID 20260816T061442Z-6df94d，manifest 与 default_summary.json 由 python -m ltverify report 生成）：
+
+- 增强方法：Precision 0.143、Recall 0.200、F1 0.167、PR-AUC 0.378（连续 anomaly_score 口径）、Top-1 修正率 0.2、Top-2 修正率 0.4、自动推荐覆盖率 0.292；Top-3 在三馈线场景标记为不适用。
+- 基线（仅原始电压相关）：全部不触发告警，F1 0.0。
+- 物理检查：base-case 检查收敛、电压 1.0–1.0001 p.u.、功率平衡误差 7.5e-14 MW；逐时刻校验 2880/2880 时刻收敛、电压 0.964–1.0 p.u.、全部时刻 severity=ok（记录于运行目录 simulation_validation.csv）。
+
+**诚实结论与失败边界**：默认参数化下，合成数据的电压特征无法区分馈线——实测同馈线配变残差电压相关系数均值 −0.064 与跨馈线 +0.009 无方向性差异（84/192 对）。原因：馈线级电压共享分量约 2e-4 p.u.，远小于配变自身阻抗压降（约 4e-3 p.u.）与量测噪声（5e-4 p.u.）。增强方法优于基线但远低于 F1≥0.85 的研究目标；本项目按设计规格风险表应对项"报告失败边界"如实记录，后续改进方向为增加馈线线路阻抗与馈线级负荷差异。
+
+**鲁棒性与消融实验**：130 案例矩阵的原始与聚合结果见 reports/metrics/robustness_summary.csv 与 robustness_aggregates.csv（含逐案例物理字段与 experiment_manifest.json 哈希）。
 
 ## 项目限制
 
