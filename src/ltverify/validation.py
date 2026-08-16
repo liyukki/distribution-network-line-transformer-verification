@@ -24,6 +24,8 @@ class PowerFlowValidation:
     voltage_max_pu: float
     absolute_power_balance_error_mw: float
     violations: tuple[str, ...]
+    severity: str = "ok"
+    violation_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -149,6 +151,8 @@ def run_static_validation(
             voltage_max_pu=float("nan"),
             absolute_power_balance_error_mw=float("nan"),
             violations=("power flow did not converge",),
+            severity="critical",
+            violation_types=("non_convergence",),
         )
     check = check_solved_network(net, cfg)
     return PowerFlowValidation(
@@ -157,4 +161,6 @@ def run_static_validation(
         voltage_max_pu=check.voltage_max_pu,
         absolute_power_balance_error_mw=check.absolute_power_balance_error_mw,
         violations=check.messages,
+        severity=check.severity,
+        violation_types=check.violation_types,
     )

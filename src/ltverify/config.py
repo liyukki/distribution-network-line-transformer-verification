@@ -23,6 +23,14 @@ class ProfileConfig(BaseModel):
     pv_scale: float = Field(default=1.0, ge=0.0, le=10.0)
 
 
+ALLOWED_VIOLATION_TYPES = (
+    "non_convergence",
+    "power_balance",
+    "voltage_out_of_bounds",
+    "transformer_overload",
+)
+
+
 class ValidationConfig(BaseModel):
     voltage_min_pu: float = 0.90
     voltage_max_pu: float = 1.10
@@ -40,6 +48,18 @@ class ValidationConfig(BaseModel):
     def ordered_limits(self) -> "ValidationConfig":
         if self.voltage_min_pu >= self.voltage_max_pu:
             raise ValueError("voltage_min_pu must be lower than voltage_max_pu")
+        return self
+
+    @model_validator(mode="after")
+    def validate_critical_types(self) -> "ValidationConfig":
+        deduplicated = tuple(dict.fromkeys(self.critical_violation_types))
+        unknown = sorted(set(deduplicated) - set(ALLOWED_VIOLATION_TYPES))
+        if unknown:
+            raise ValueError(
+                f"未知的 critical_violation_types: {unknown}；"
+                f"允许值: {list(ALLOWED_VIOLATION_TYPES)}"
+            )
+        object.__setattr__(self, "critical_violation_types", deduplicated)
         return self
 
 
