@@ -208,8 +208,8 @@ def verify_manifest_hashes(manifest: dict[str, object], run_dir: Path) -> None:
                 f"output_sha256['{text}'] 必须是 64 位十六进制字符串"
             )
         path = Path(run_dir) / text
-        if not path.exists():
-            raise ValueError(f"缺少清单产物: {text}")
+        if not path.is_file():
+            raise ValueError(f"清单产物不是普通文件: {text}")
         actual = file_sha256(path)
         if actual != expected:
             raise ValueError(

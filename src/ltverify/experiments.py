@@ -387,9 +387,9 @@ def run_experiments(path: Path, output_dir: Path) -> Path:
             )
         rows[-1]["runtime_seconds"] = time.perf_counter() - started
     summary = pd.DataFrame(rows, columns=SUMMARY_COLUMNS)
-    summary.to_csv(output_dir / "robustness_summary.csv", index=False)
+    summary.to_csv(output_dir / CURRENT_SUMMARY_NAME, index=False)
     aggregates = _aggregate(summary)
-    aggregates.to_csv(output_dir / "robustness_aggregates.csv", index=False)
+    aggregates.to_csv(output_dir / CURRENT_AGGREGATES_NAME, index=False)
 
     manifest = {
         "artifact_schema_version": 2,
@@ -412,16 +412,16 @@ def run_experiments(path: Path, output_dir: Path) -> Path:
             "failed": int((summary["status"] == "failed").sum()),
         },
         "output_files": {
-            "robustness_summary.csv": _file_sha256(
-                output_dir / "robustness_summary.csv"
+            CURRENT_SUMMARY_NAME: _file_sha256(
+                output_dir / CURRENT_SUMMARY_NAME
             ),
-            "robustness_aggregates.csv": _file_sha256(
-                output_dir / "robustness_aggregates.csv"
+            CURRENT_AGGREGATES_NAME: _file_sha256(
+                output_dir / CURRENT_AGGREGATES_NAME
             ),
         },
     }
     write_json_atomic(
-        manifest, output_dir / "robustness_experiment_manifest.json"
+        manifest, output_dir / CURRENT_MANIFEST_NAME
     )
     return output_dir
 
@@ -481,8 +481,10 @@ def verify_experiment_manifest(
         if not _SHA256_PATTERN.match(str(expected)):
             raise ValueError(f"output_files 哈希必须是 64 位十六进制: {text}")
         path = artifact_dir / text
-        if not path.exists():
-            raise ValueError(f"experiment manifest 声明的文件不存在: {text}")
+        if not path.is_file():
+            raise ValueError(
+                f"experiment manifest 声明的文件不是普通文件: {text}"
+            )
         actual = _file_sha256(path)
         if actual != expected:
             raise ValueError(
@@ -555,16 +557,16 @@ def verify_experiment_manifest(
             f"case_counts 不一致: total={total} != completed+failed="
             f"{completed + failed}"
         )
-    summary_path = artifact_dir / "robustness_summary.csv"
+    summary_path = artifact_dir / CURRENT_SUMMARY_NAME
     if not summary_path.exists():
-        raise ValueError("缺少 robustness_summary.csv")
+        raise ValueError(f"缺少 {CURRENT_SUMMARY_NAME}")
     summary = pd.read_csv(summary_path)
     if len(summary) != total:
         raise ValueError(
             f"summary 行数 {len(summary)} 与 case_counts.total {total} 不一致"
         )
     if "status" not in summary.columns:
-        raise ValueError("robustness_summary.csv 缺少 status 列")
+        raise ValueError(f"{CURRENT_SUMMARY_NAME} 缺少 status 列")
     unknown_statuses = sorted(
         set(summary["status"].astype(str).unique()) - {"completed", "failed"}
     )
