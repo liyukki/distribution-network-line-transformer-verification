@@ -1,5 +1,7 @@
 # 配电网线变关系智能校验系统
 
+> 面向电网/能源数字化实习的可复现研究型原型。
+
 基于时序量测与潮流仿真的配电网线变关系智能校验系统（distribution-network-line-transformer-verification）。利用同一馈线下配变电压与功率变化中的共同运行特征，自动校验"10 kV 馈线—配电变压器"台账归属，输出疑似错误告警、最可能的正确馈线、匹配分数与可解释证据。
 
 ## 业务背景
@@ -33,9 +35,18 @@ flowchart LR
 
 ## 快速开始
 
+Windows:
+
 ```text
 py -3.12 -m venv .venv
 .venv/Scripts/python.exe -m pip install -e ".[dev]"
+```
+
+Linux/macOS:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[dev]"
 ```
 
 小规模冒烟运行（3 馈线 × 3 配变、1 天、6 小时间隔）：
@@ -69,6 +80,26 @@ streamlit run app/streamlit_app.py
 ```
 
 三个可从头执行的教学 Notebook：notebooks/01_network_sanity.ipynb（网络健全性）、notebooks/02_baseline_analysis.ipynb（基线对比）、notebooks/03_robustness_analysis.ipynb（鲁棒性聚合）。
+
+## 质量与复现
+
+本地质量门禁：
+
+```text
+.venv/Scripts/python.exe -m ruff format --check src app tests scripts
+.venv/Scripts/python.exe -m ruff check src app tests scripts
+.venv/Scripts/python.exe -m pytest --cov=ltverify --cov-report=term-missing --cov-fail-under=90 -q
+```
+
+GitHub Actions 已配置 `.github/workflows/ci.yml`，在 push/PR 时对 Python 3.11 与 3.12 运行格式检查、静态检查、测试与 wheel 构建。
+
+证据复现命令：
+
+```text
+python -m ltverify report --run-dir <运行目录> --output reports/metrics/default_summary.json
+```
+
+更多信任边界与公开审计说明见 `AI_USAGE.md`、`docs/audit-summary.md`、`docs/design.md`。
 
 ## 实验设计
 
@@ -117,8 +148,10 @@ app/              # Streamlit 中文多页看板
 notebooks/        # 网络健全性、基线对比、鲁棒性聚合三个可执行 Notebook
 tests/            # 单元、集成与防泄漏测试
 scripts/          # Windows 一键运行脚本
-docs/             # 方法论与面试指南
+docs/             # 方法论、设计说明、公开审计摘要与面试指南
 data/             # 数据目录与数据字典
+.github/          # GitHub Actions CI 配置
+AI_USAGE.md       # AI 使用说明
 ```
 
 ## 面试展示
