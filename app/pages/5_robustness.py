@@ -8,20 +8,30 @@ from ltverify.plotting import robustness_line_figure
 st.title("鲁棒性实验")
 
 
-def _default_path(*patterns: str) -> str:
-    for pattern in patterns:
-        candidates = sorted(Path("runs").glob(pattern), reverse=True)
-        if candidates:
-            return str(candidates[0])
-    return ""
+def _default_experiment_paths() -> tuple[str, str]:
+    """Pick one experiment directory and return its aggregate and summary paths.
+
+    New ``robustness_*`` naming is preferred globally; legacy
+    ``experiment_*`` is used only when no new-named aggregate exists. Both
+    paths always come from the same directory to avoid mixing partial
+    experiment outputs.
+    """
+    directories = sorted(Path("runs").glob("experiments-*"), reverse=True)
+    for prefix in ("robustness_", "experiment_"):
+        for directory in directories:
+            aggregates = directory / f"{prefix}aggregates.csv"
+            if aggregates.exists():
+                summary = directory / f"{prefix}summary.csv"
+                return str(aggregates), (
+                    str(summary) if summary.exists() else ""
+                )
+    return "", ""
 
 
+default_aggregates_path, default_summary_path = _default_experiment_paths()
 aggregates_path = st.text_input(
     "实验聚合 CSV 路径（robustness_aggregates.csv）",
-    value=_default_path(
-        "experiments-*/robustness_aggregates.csv",
-        "experiments-*/experiment_aggregates.csv",
-    ),
+    value=default_aggregates_path,
 )
 if not aggregates_path:
     st.info(
@@ -75,10 +85,7 @@ with st.expander("聚合汇总"):
 
 summary_path = st.text_input(
     "案例明细 CSV 路径（robustness_summary.csv，仅用于明细与失败原因）",
-    value=_default_path(
-        "experiments-*/robustness_summary.csv",
-        "experiments-*/experiment_summary.csv",
-    ),
+    value=default_summary_path,
 )
 if summary_path and Path(summary_path).exists():
     summary = pd.read_csv(summary_path)
