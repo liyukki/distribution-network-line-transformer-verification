@@ -40,14 +40,16 @@ anomaly_score = coverage × min(1 − current_score, max(margin, 0))。该公式
 
 ## 物理校验策略
 
-- 潮流不收敛始终是硬失败（fatal），不受 critical_violation_types 配置影响。
-- 已求解网络的工程越限（电压越限、变压器过载、功率平衡误差超容差）按 critical_violation_types 分类为 critical/warning；默认配置包含全部四类，即默认策略为零容忍，任何违规都使流水线与实验案例失败（terminate_on_critical=true）；用户可显式降级其中某些类型为 warning，降级后仍会记录违规计数。
-- 基础工况（base-case）与时序工况使用同一套严重等级分类函数；未知的 critical_violation_types 在配置加载阶段即失败，重复类型被去重。
+- 潮流不收敛始终是硬失败（fatal），不属于可配置降级类型，critical_violation_types 不接受 non_convergence。
+- 已求解网络的三类工程违规可配置：power_balance、voltage_out_of_bounds、transformer_overload；默认配置包含全部三类，即默认策略为零容忍，任何违规都使流水线与实验案例失败（terminate_on_critical=true）；用户可显式降级其中某些类型为 warning，降级后仍会记录违规计数。
+- 基础工况（base-case）与时序工况使用同一套严重等级分类函数；未知或重复的 critical_violation_types 在配置加载阶段即被拒绝/规范化。
+- base-case 违规详情（count/types/全部消息/severity）写入 metrics.json：base_case_violation_count、base_case_violation_types、base_case_violations、base_case_severity；terminate_on_critical=false 时 critical 详情同样落盘。
 
 ## 证据链
 
-- 运行清单 schema 2：output_paths 与 output_sha256 严格一一对应，只允许相对安全路径，哈希必须为 64 位十六进制；config.snapshot.yaml 的哈希必须等于 manifest.config_sha256，报告生成前执行全量校验，篡改任一产物（含配置快照）都会拒绝生成。
-- 实验清单同时固定实验矩阵配置（experiment_config_sha256/snapshot）与基础业务配置（base_config_sha256/snapshot），并记录全部输出文件哈希。
+- 运行清单 schema 2：output_paths 与 output_sha256 严格一一对应，只允许相对安全路径，哈希必须为 64 位十六进制；config.snapshot.yaml 的哈希必须等于 manifest.config_sha256。报告生成遵循"先验签、后解析"：只读 manifest.json → schema 判定 → verify_manifest_hashes → 之后才读取配置与数据产物；篡改任一产物（含配置快照）都会在解析前拒绝。
+- 鲁棒性产物权威命名：robustness_summary.csv、robustness_aggregates.csv、robustness_experiment_manifest.json；实验清单（verify_experiment_manifest 校验）同时固定实验矩阵配置（experiment_config_name/sha256/snapshot）与基础业务配置（base_config_name/sha256/snapshot），并记录全部输出文件哈希；base_config 相对路径以实验 YAML 所在目录解析，清单内所有路径可移植（无盘符/反斜杠）。
+- report 命令在写入前拒绝输出与清单输出路径相同、或覆盖源运行目录产物的情况；清单版本非法/旧版/未来版均明确拒绝或提示。
 - default_summary.json 不含本机绝对路径，包含 source_manifest_sha256、时间序列物理汇总与关键产物哈希，可由 python -m ltverify report 完全复现。
 
 ## 数据划分与泄漏防护
