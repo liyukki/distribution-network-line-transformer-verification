@@ -22,7 +22,7 @@ from sklearn.metrics import (
 
 @dataclass(frozen=True)
 class EvaluationResult:
-    metrics: dict[str, float | int]
+    metrics: dict[str, object]
     confusion_matrix: pd.DataFrame
     labeled_predictions: pd.DataFrame
 
@@ -54,9 +54,26 @@ def evaluate_predictions(
             "predictions must contain a continuous anomaly_score column"
         )
     anomaly_score = merged["anomaly_score"].astype(float)
-    pr_auc = average_precision_score(actual.astype(int), anomaly_score)
+    n_actual_errors = int(actual.sum())
+    n_actual_correct = int((~actual).sum())
+    classes = sorted(set(actual.dropna().astype(bool).tolist()))
+    if len(classes) == 2:
+        pr_auc = float(
+            average_precision_score(actual.astype(int), anomaly_score)
+        )
+        pr_auc_applicable = True
+        pr_auc_unavailable_reason = None
+    else:
+        pr_auc = None
+        pr_auc_applicable = False
+        pr_auc_unavailable_reason = (
+            "single_class_all_positive"
+            if classes == [True]
+            else "single_class_all_negative"
+        )
     scored_mask = merged["decision"] != "insufficient_data"
-    if scored_mask.any() and actual[scored_mask].nunique() == 2:
+    scored_classes = sorted(set(actual[scored_mask].dropna().astype(bool).tolist()))
+    if scored_mask.any() and len(scored_classes) == 2:
         pr_auc_scored = float(
             average_precision_score(
                 actual[scored_mask].astype(int),
@@ -64,9 +81,13 @@ def evaluate_predictions(
             )
         )
         pr_auc_scored_applicable = True
+        pr_auc_scored_unavailable_reason = None
     else:
         pr_auc_scored = None
         pr_auc_scored_applicable = False
+        pr_auc_scored_unavailable_reason = (
+            "single_class" if scored_classes else "no_scored_samples"
+        )
     matrix = confusion_matrix(actual, predicted, labels=[False, True])
 
     candidate_feeders = sorted(
@@ -86,24 +107,26 @@ def evaluate_predictions(
             continue
         hits = 0
         evaluated = 0
+        excluded_total = 0
         for transformer_id in error_rows["transformer_id"]:
             rows = candidate_scores[
                 candidate_scores["transformer_id"] == transformer_id
             ].copy()
             finite_scores = pd.to_numeric(
                 rows["enhanced_score"], errors="coerce"
-            )
+            ).apply(lambda value: np.isfinite(value))
             if "available_feature_weight" in rows.columns:
-                weights = pd.to_numeric(
+                raw_weights = pd.to_numeric(
                     rows["available_feature_weight"], errors="coerce"
                 )
+                eligible_mask = (
+                    finite_scores
+                    & raw_weights.apply(lambda value: np.isfinite(value))
+                    & (raw_weights >= evidence_weight_threshold)
+                )
             else:
-                weights = pd.Series(1.0, index=rows.index)
-            eligible_mask = (
-                finite_scores.notna()
-                & weights.notna()
-                & (weights >= evidence_weight_threshold)
-            )
+                eligible_mask = finite_scores
+            excluded_total += int((~eligible_mask).sum())
             eligible = rows[eligible_mask]
             if len(eligible) < k:
                 # 有效候选不足 k，该设备对 Top-k 不可评价
@@ -128,18 +151,23 @@ def evaluate_predictions(
             evaluated / len(error_rows) if len(error_rows) else None
         )
 
-    metrics: dict[str, float | int | None] = {
+    metrics: dict[str, object] = {
         "precision": float(precision),
         "recall": float(recall),
         "f1": float(f1),
-        "pr_auc": float(pr_auc),
+        "pr_auc": pr_auc,
+        "pr_auc_applicable": pr_auc_applicable,
+        "pr_auc_unavailable_reason": pr_auc_unavailable_reason,
         "pr_auc_scored": pr_auc_scored,
         "pr_auc_scored_applicable": pr_auc_scored_applicable,
+        "pr_auc_scored_unavailable_reason": pr_auc_scored_unavailable_reason,
         **topk,
         "topk_applicable": topk_applicable,
+        "excluded_candidate_count": excluded_total,
         "candidate_feeder_count": candidate_count,
         "n_total": len(merged),
-        "n_actual_errors": int(actual.sum()),
+        "n_actual_errors": n_actual_errors,
+        "n_actual_correct": n_actual_correct,
         "n_predicted": int(predicted.sum()),
         "automatic_coverage": float(
             (merged["decision"] == "automatic_recommendation").mean()

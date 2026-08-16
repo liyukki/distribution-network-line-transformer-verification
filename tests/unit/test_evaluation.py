@@ -181,11 +181,11 @@ def test_evaluate_applies_evidence_weight_threshold() -> None:
 def test_single_class_all_negative_pr_auc_is_null() -> None:
     predictions, truth, ledger, candidate_scores = evaluation_fixture()
     # 所有台账与真值一致 → 实际错误数为 0（单类别）
-    ledger_all_correct = truth.rename(
-        columns={"physical_feeder_id": "reported_feeder_id"}
+    predictions = predictions.assign(
+        reported_feeder_id=truth["physical_feeder_id"].tolist()
     )
     result = evaluate_predictions(
-        predictions, truth, ledger_all_correct, candidate_scores
+        predictions, truth, ledger, candidate_scores
     )
     assert result.metrics["pr_auc"] is None
     assert result.metrics["pr_auc_applicable"] is False
@@ -195,7 +195,7 @@ def test_single_class_all_negative_pr_auc_is_null() -> None:
 
 def test_single_class_all_positive_pr_auc_is_null() -> None:
     predictions, truth, ledger, candidate_scores = evaluation_fixture()
-    all_positive = truth.assign(physical_feeder_id=["F02", "F03", "F01"])
+    all_positive = truth.assign(physical_feeder_id=["F01", "F01", "F01"])
     result = evaluate_predictions(
         predictions, truth=all_positive, ledger=ledger, candidate_scores=candidate_scores
     )
