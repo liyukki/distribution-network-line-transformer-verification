@@ -8,7 +8,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from ltverify.experiments import expand_experiment_grid, run_experiments
+from ltverify.experiments import (
+    CURRENT_SUMMARY_NAME,
+    expand_experiment_grid,
+    run_experiments,
+)
 from ltverify.pipeline import run_pipeline
 
 _CONFIG_SUBCOMMANDS = ("run-all", "experiments")
@@ -81,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:  # noqa: BLE001 - CLI top-level boundary
             print(f"experiments failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
-        summary = pd.read_csv(output_dir / "robustness_summary.csv")
+        summary = pd.read_csv(output_dir / CURRENT_SUMMARY_NAME)
         if len(summary) and (summary["status"] != "completed").all():
             print("every experiment case failed", file=sys.stderr)
             return 1
