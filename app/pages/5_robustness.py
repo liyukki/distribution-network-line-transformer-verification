@@ -8,14 +8,20 @@ from ltverify.plotting import robustness_line_figure
 st.title("鲁棒性实验")
 
 
-def _default_path(pattern: str) -> str:
-    candidates = sorted(Path("runs").glob(pattern), reverse=True)
-    return str(candidates[0]) if candidates else ""
+def _default_path(*patterns: str) -> str:
+    for pattern in patterns:
+        candidates = sorted(Path("runs").glob(pattern), reverse=True)
+        if candidates:
+            return str(candidates[0])
+    return ""
 
 
 aggregates_path = st.text_input(
     "实验聚合 CSV 路径（robustness_aggregates.csv）",
-    value=_default_path("experiments-*/robustness_aggregates.csv"),
+    value=_default_path(
+        "experiments-*/robustness_aggregates.csv",
+        "experiments-*/experiment_aggregates.csv",
+    ),
 )
 if not aggregates_path:
     st.info(
@@ -69,7 +75,10 @@ with st.expander("聚合汇总"):
 
 summary_path = st.text_input(
     "案例明细 CSV 路径（robustness_summary.csv，仅用于明细与失败原因）",
-    value=_default_path("experiments-*/robustness_summary.csv"),
+    value=_default_path(
+        "experiments-*/robustness_summary.csv",
+        "experiments-*/experiment_summary.csv",
+    ),
 )
 if summary_path and Path(summary_path).exists():
     summary = pd.read_csv(summary_path)

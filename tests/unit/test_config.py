@@ -46,3 +46,15 @@ def test_duplicate_critical_types_are_normalized() -> None:
         "transformer_overload",
         "power_balance",
     )
+
+
+def test_non_convergence_error_suggests_migration(tmp_path: Path) -> None:
+    path = tmp_path / "legacy.yaml"
+    path.write_text(
+        "validation:\n  critical_violation_types: [non_convergence]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError) as exc_info:
+        load_config(path)
+    message = str(exc_info.value)
+    assert "non_convergence 已改为无条件硬失败，请从列表中移除" in message

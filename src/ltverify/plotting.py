@@ -184,8 +184,9 @@ def robustness_line_figure(
 ) -> go.Figure:
     """Mean plus/minus one sample standard deviation across experiment levels.
 
-    Requires the aggregate product (experiment_aggregates.csv); the raw
-    experiment_summary.csv lacks the mean_*/std_* columns and is rejected
+    Requires the aggregate product (robustness_aggregates.csv; legacy
+    experiment_aggregates.csv is also accepted by callers); the raw
+    robustness_summary.csv lacks the mean_*/std_* columns and is rejected
     with an explicit error. Numeric level values are ordered numerically.
     """
     required = {"family", "value", f"mean_{metric}", f"std_{metric}"}

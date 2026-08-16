@@ -66,6 +66,71 @@ def test_robustness_page_renders_with_tmp_aggregates(tmp_path: Path) -> None:
     assert len(app_test.get("plotly_chart")) >= 1
 
 
+def test_robustness_page_auto_detects_legacy_aggregates(
+    tmp_path: Path, monkeypatch
+) -> None:
+    metrics = [
+        "precision",
+        "recall",
+        "f1",
+        "top1_correction_rate",
+        "top2_correction_rate",
+        "automatic_coverage",
+        "convergence_rate",
+    ]
+    aggregates = pd.DataFrame(
+        {
+            "family": ["missing_rate", "missing_rate"],
+            "value": ["0.0", "0.1"],
+            **{f"mean_{metric}": [0.9, 0.8] for metric in metrics},
+            **{f"std_{metric}": [0.05, 0.06] for metric in metrics},
+        }
+    )
+    legacy_dir = tmp_path / "runs" / "experiments-20260815T170948-e22672"
+    legacy_dir.mkdir(parents=True)
+    legacy_csv = legacy_dir / "experiment_aggregates.csv"
+    aggregates.to_csv(legacy_csv, index=False)
+
+    monkeypatch.chdir(tmp_path)
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert Path(app_test.text_input[0].value).resolve() == legacy_csv
+    assert len(app_test.get("plotly_chart")) >= 1
+
+
+def test_robustness_page_prefers_new_aggregates_over_legacy(
+    tmp_path: Path, monkeypatch
+) -> None:
+    metrics = ["f1"]
+    aggregates = pd.DataFrame(
+        {
+            "family": ["missing_rate"],
+            "value": ["0.1"],
+            **{f"mean_{metric}": [0.8] for metric in metrics},
+            **{f"std_{metric}": [0.06] for metric in metrics},
+        }
+    )
+    experiment_dir = tmp_path / "runs" / "experiments-20260816T000000"
+    experiment_dir.mkdir(parents=True)
+    new_csv = experiment_dir / "robustness_aggregates.csv"
+    legacy_csv = experiment_dir / "experiment_aggregates.csv"
+    aggregates.to_csv(new_csv, index=False)
+    aggregates.to_csv(legacy_csv, index=False)
+
+    monkeypatch.chdir(tmp_path)
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert Path(app_test.text_input[0].value).resolve() == new_csv
+
+
 def test_robustness_page_lists_complete_metrics(tmp_path: Path) -> None:
     metric_columns = [
         "precision",

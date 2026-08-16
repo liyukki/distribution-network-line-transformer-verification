@@ -53,10 +53,15 @@ class ValidationConfig(BaseModel):
         deduplicated = tuple(dict.fromkeys(self.critical_violation_types))
         unknown = sorted(set(deduplicated) - set(ALLOWED_VIOLATION_TYPES))
         if unknown:
-            raise ValueError(
+            message = (
                 f"未知的 critical_violation_types: {unknown}；"
                 f"允许值: {list(ALLOWED_VIOLATION_TYPES)}"
             )
+            if "non_convergence" in unknown:
+                message += (
+                    "；non_convergence 已改为无条件硬失败，请从列表中移除"
+                )
+            raise ValueError(message)
         object.__setattr__(self, "critical_violation_types", deduplicated)
         return self
 
