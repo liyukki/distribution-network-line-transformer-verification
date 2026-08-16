@@ -48,11 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         from ltverify.report import generate_default_summary
 
         try:
-            manifest_output = (
-                Path(args.manifest_output)
-                if args.manifest_output
-                else None
-            )
+            manifest_output = Path(args.manifest_output) if args.manifest_output else None
             output = generate_default_summary(
                 Path(args.run_dir),
                 Path(args.output),

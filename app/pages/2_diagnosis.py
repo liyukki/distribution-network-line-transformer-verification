@@ -9,12 +9,10 @@ if artifacts is None:
     st.info("请先在主页加载运行目录。")
     st.stop()
 
-transformer_id = st.selectbox(
-    "选择配变", artifacts.predictions["transformer_id"].tolist()
-)
-prediction = artifacts.predictions[
-    artifacts.predictions["transformer_id"] == transformer_id
-].iloc[0]
+transformer_id = st.selectbox("选择配变", artifacts.predictions["transformer_id"].tolist())
+prediction = artifacts.predictions[artifacts.predictions["transformer_id"] == transformer_id].iloc[
+    0
+]
 st.markdown(
     f"**判定**: {prediction['decision']}　|　"
     f"**台账馈线**: {prediction['reported_feeder_id']}　|　"
@@ -25,12 +23,10 @@ st.markdown(
 
 observed = artifacts.observed_measurements
 device = observed[observed["transformer_id"] == transformer_id]
-voltage_wide = device.pivot(
-    index="timestamp", columns="transformer_id", values="voltage_pu"
-)
+voltage_wide = device.pivot(index="timestamp", columns="transformer_id", values="voltage_pu")
 st.plotly_chart(
     voltage_curves_figure(voltage_wide, [transformer_id]),
-    width='stretch',
+    width="stretch",
 )
 
 scores = artifacts.candidate_features[
@@ -38,7 +34,7 @@ scores = artifacts.candidate_features[
 ]
 st.plotly_chart(
     candidate_score_bars_figure(scores, transformer_id),
-    width='stretch',
+    width="stretch",
 )
 
 quality = device["data_quality_flag"].value_counts().to_dict()

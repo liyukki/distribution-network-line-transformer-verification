@@ -66,9 +66,7 @@ _SHAPE_BY_TYPE = {
 
 
 def _daylight_factor(hour: np.ndarray) -> np.ndarray:
-    daylight = np.sin(
-        np.pi * (hour - _PV_SUNRISE_HOUR) / (_PV_SUNSET_HOUR - _PV_SUNRISE_HOUR)
-    )
+    daylight = np.sin(np.pi * (hour - _PV_SUNRISE_HOUR) / (_PV_SUNSET_HOUR - _PV_SUNRISE_HOUR))
     return np.where(
         (hour >= _PV_SUNRISE_HOUR) & (hour <= _PV_SUNSET_HOUR),
         np.clip(daylight, 0.0, None),
@@ -81,9 +79,7 @@ def _ar1_noise(rng: np.random.Generator, steps: int, columns: int) -> np.ndarray
     innovations = rng.normal(0.0, _NOISE_STD, size=(steps, columns))
     noise[0] = innovations[0]
     for step in range(1, steps):
-        noise[step] = (
-            _AR1_COEFFICIENT * noise[step - 1] + innovations[step]
-        )
+        noise[step] = _AR1_COEFFICIENT * noise[step - 1] + innovations[step]
     return np.clip(noise, -_NOISE_CLIP, _NOISE_CLIP)
 
 
@@ -130,8 +126,7 @@ def generate_profiles(
         shape = shape / shape.max()
         feeder_count = len(feeder_numbers)
         feeder_factor = 1.0 + _FEEDER_SINUSOID_AMPLITUDE * np.sin(
-            2.0 * np.pi * hour / 24.0
-            + 2.0 * np.pi * feeder_number / feeder_count
+            2.0 * np.pi * hour / 24.0 + 2.0 * np.pi * feeder_number / feeder_count
         )
         column_profile = (
             _BASE_LOAD_PEAK_MW
@@ -146,23 +141,15 @@ def generate_profiles(
     q_factor = np.tan(np.arccos(cfg.power_factor))
     load_q = load_p * q_factor
 
-    pv_ids = asset_table.loc[
-        asset_table["pv_index"].notna(), "transformer_id"
-    ].tolist()
+    pv_ids = asset_table.loc[asset_table["pv_index"].notna(), "transformer_id"].tolist()
     pv_p = np.zeros((periods, len(transformer_ids)))
     daylight = _daylight_factor(hour)
     day_starts = index.normalize().unique()
     for transformer_id in pv_ids:
         column = transformer_ids.index(transformer_id)
         clouds = rng.uniform(_PV_CLOUD_LOW, _PV_CLOUD_HIGH, size=len(day_starts))
-        cloud_by_step = (
-            pd.Series(clouds, index=day_starts)
-            .reindex(index.normalize())
-            .to_numpy()
-        )
-        pv_p[:, column] = (
-            _PV_NAMEPLATE_MW * cfg.pv_scale * daylight * cloud_by_step
-        )
+        cloud_by_step = pd.Series(clouds, index=day_starts).reindex(index.normalize()).to_numpy()
+        pv_p[:, column] = _PV_NAMEPLATE_MW * cfg.pv_scale * daylight * cloud_by_step
 
     return TimeSeriesProfiles(
         index=index,

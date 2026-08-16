@@ -34,11 +34,7 @@ def _default_experiment_paths() -> tuple[str, str]:
         aggregates = directory / CURRENT_AGGREGATES_NAME
         summary = directory / CURRENT_SUMMARY_NAME
         manifest = directory / CURRENT_MANIFEST_NAME
-        if (
-            aggregates.is_file()
-            and summary.is_file()
-            and manifest.is_file()
-        ):
+        if aggregates.is_file() and summary.is_file() and manifest.is_file():
             return str(aggregates), str(summary)
     for directory in directories:
         aggregates = directory / LEGACY_AGGREGATES_NAME
@@ -47,21 +43,13 @@ def _default_experiment_paths() -> tuple[str, str]:
         summary = directory / LEGACY_SUMMARY_NAME
         if summary.exists() and not summary.is_file():
             continue
-        return str(aggregates), (
-            str(summary) if summary.is_file() else ""
-        )
+        return str(aggregates), (str(summary) if summary.is_file() else "")
     return "", ""
 
 
 def _source_config_paths() -> tuple[Path | None, Path | None]:
-    experiment_config = (
-        _DEFAULT_EXPERIMENT_CONFIG
-        if _DEFAULT_EXPERIMENT_CONFIG.is_file()
-        else None
-    )
-    base_config = (
-        _DEFAULT_BASE_CONFIG if _DEFAULT_BASE_CONFIG.is_file() else None
-    )
+    experiment_config = _DEFAULT_EXPERIMENT_CONFIG if _DEFAULT_EXPERIMENT_CONFIG.is_file() else None
+    base_config = _DEFAULT_BASE_CONFIG if _DEFAULT_BASE_CONFIG.is_file() else None
     return experiment_config, base_config
 
 
@@ -143,13 +131,13 @@ try:
 except ValueError as exc:
     st.error(str(exc))
     st.stop()
-st.plotly_chart(figure, width='stretch')
+st.plotly_chart(figure, width="stretch")
 with st.expander("聚合汇总"):
-    st.dataframe(aggregates, width='stretch')
+    st.dataframe(aggregates, width="stretch")
 
 if artifacts.summary is not None:
     with st.expander("案例明细与失败原因"):
-        st.dataframe(artifacts.summary, width='stretch')
+        st.dataframe(artifacts.summary, width="stretch")
         failed = artifacts.summary[artifacts.summary["status"] != "completed"]
         if len(failed):
             st.warning(f"存在 {len(failed)} 个失败案例，详见明细表。")

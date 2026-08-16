@@ -21,14 +21,10 @@ from ltverify.validation import run_static_validation
 
 def _run_directory(config_sha256: str) -> Path:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-    return Path(
-        f"run-{stamp}-{config_sha256[:8]}-{uuid.uuid4().hex[:6]}"
-    )
+    return Path(f"run-{stamp}-{config_sha256[:8]}-{uuid.uuid4().hex[:6]}")
 
 
-def _write_manifest(
-    manifest: RunManifest, run_dir: Path, output_paths: list[Path]
-) -> None:
+def _write_manifest(manifest: RunManifest, run_dir: Path, output_paths: list[Path]) -> None:
     if not output_paths:
         raise ValueError("_write_manifest 不允许空输出列表")
     names: list[str] = []
@@ -43,15 +39,11 @@ def _write_manifest(
         try:
             hashes[name] = file_sha256(path)
         except OSError as exc:
-            raise ValueError(
-                f"读取清单输出哈希失败: {path.name}"
-            ) from exc
+            raise ValueError(f"读取清单输出哈希失败: {path.name}") from exc
         names.append(name)
     manifest.output_paths = names
     manifest.output_sha256 = hashes
-    write_json_atomic(
-        manifest.model_dump(mode="json"), run_dir / "manifest.json"
-    )
+    write_json_atomic(manifest.model_dump(mode="json"), run_dir / "manifest.json")
 
 
 def run_pipeline(config_path: Path) -> Path:
@@ -85,10 +77,7 @@ def run_pipeline(config_path: Path) -> Path:
                 "violations": list(base_case.violations),
             }
             raise RuntimeError("base-case power flow did not converge")
-        if (
-            base_case.severity == "critical"
-            and config.validation.terminate_on_critical
-        ):
+        if base_case.severity == "critical" and config.validation.terminate_on_critical:
             failure_context = {
                 "stage": "base_case_validation",
                 "severity": base_case.severity,
@@ -96,16 +85,10 @@ def run_pipeline(config_path: Path) -> Path:
                 "violation_types": list(base_case.violation_types),
                 "violations": list(base_case.violations),
             }
-            raise RuntimeError(
-                f"critical base-case violations: {base_case.violations}"
-            )
+            raise RuntimeError(f"critical base-case violations: {base_case.violations}")
 
-        profiles = generate_profiles(
-            artifacts, config.profiles, seed=config.random_seed
-        )
-        simulation = simulate_time_series(
-            artifacts, profiles, config.validation
-        )
+        profiles = generate_profiles(artifacts, config.profiles, seed=config.random_seed)
+        simulation = simulate_time_series(artifacts, profiles, config.validation)
         if not simulation.failures.empty:
             failure = simulation.failures.iloc[0]
             raise RuntimeError(
@@ -113,19 +96,13 @@ def run_pipeline(config_path: Path) -> Path:
                 f"{failure['error_type']} - {failure['message']}"
             )
         if config.validation.terminate_on_critical and len(simulation.validation):
-            critical = simulation.validation[
-                simulation.validation["severity"] == "critical"
-            ]
+            critical = simulation.validation[simulation.validation["severity"] == "critical"]
             if len(critical):
                 stamps = critical["timestamp"].head(3).tolist()
-                raise RuntimeError(
-                    f"critical physical violations at timestamps: {stamps}"
-                )
+                raise RuntimeError(f"critical physical violations at timestamps: {stamps}")
 
         truth = build_truth(artifacts)
-        ledger = corrupt_ledger(
-            truth, config.corruption.ledger_error_rate, seed=config.random_seed
-        )
+        ledger = corrupt_ledger(truth, config.corruption.ledger_error_rate, seed=config.random_seed)
         observed = disturb_measurements(
             simulation.transformer_measurements,
             config.corruption,
@@ -160,9 +137,7 @@ def run_pipeline(config_path: Path) -> Path:
         metrics["base_case_converged"] = base_case.converged
         metrics["base_case_voltage_min_pu"] = base_case.voltage_min_pu
         metrics["base_case_voltage_max_pu"] = base_case.voltage_max_pu
-        metrics["base_case_balance_error_mw"] = (
-            base_case.absolute_power_balance_error_mw
-        )
+        metrics["base_case_balance_error_mw"] = base_case.absolute_power_balance_error_mw
         metrics["base_case_severity"] = base_case.severity
         metrics["base_case_violation_count"] = len(base_case.violations)
         metrics["base_case_violation_types"] = list(base_case.violation_types)

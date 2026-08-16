@@ -32,11 +32,7 @@ FEATURE_COLUMNS = [
 def safe_corr(left: pd.Series, right: pd.Series, minimum_pairs: int = 16) -> float:
     """Pearson correlation over common valid points, NaN when unreliable."""
     paired = pd.concat([left, right], axis=1).dropna()
-    if (
-        len(paired) < minimum_pairs
-        or paired.iloc[:, 0].std() == 0
-        or paired.iloc[:, 1].std() == 0
-    ):
+    if len(paired) < minimum_pairs or paired.iloc[:, 0].std() == 0 or paired.iloc[:, 1].std() == 0:
         return float("nan")
     return float(paired.iloc[:, 0].corr(paired.iloc[:, 1]))
 
@@ -67,15 +63,11 @@ def _peer_features(
     event_quantile: float,
     minimum_pairs: int,
 ) -> dict[str, float]:
-    rolling = candidate.rolling(
-        rolling_window, min_periods=rolling_window // 2
-    ).corr(diff_center)
+    rolling = candidate.rolling(rolling_window, min_periods=rolling_window // 2).corr(diff_center)
     valid_rolling = rolling.dropna()
     return {
         "raw_corr": safe_corr(candidate, center, minimum_pairs=minimum_pairs),
-        "residual_corr": safe_corr(
-            residual, residual_center, minimum_pairs=minimum_pairs
-        ),
+        "residual_corr": safe_corr(residual, residual_center, minimum_pairs=minimum_pairs),
         "diff_corr": safe_corr(diff, diff_center, minimum_pairs=minimum_pairs),
         "rolling_corr_median": float(valid_rolling.median())
         if len(valid_rolling)
@@ -106,13 +98,13 @@ def build_candidate_features(
     while active_power_corr is computed whenever a legal feeder measurement
     exists.
     """
-    duplicated = feeder_measurements.duplicated(
-        subset=["timestamp", "feeder_id"], keep=False
-    )
+    duplicated = feeder_measurements.duplicated(subset=["timestamp", "feeder_id"], keep=False)
     if duplicated.any():
-        examples = feeder_measurements.loc[
-            duplicated, ["timestamp", "feeder_id"]
-        ].head(3).to_dict("records")
+        examples = (
+            feeder_measurements.loc[duplicated, ["timestamp", "feeder_id"]]
+            .head(3)
+            .to_dict("records")
+        )
         raise DataContractError(f"duplicate timestamp-feeder pairs: {examples}")
 
     voltage = prepared.voltage_wide
@@ -122,9 +114,7 @@ def build_candidate_features(
     feeder_p = feeder_measurements.pivot_table(
         index="timestamp", columns="feeder_id", values="p_mw", aggfunc="first"
     )
-    candidate_feeders = sorted(
-        feeder_measurements["feeder_id"].unique().tolist()
-    )
+    candidate_feeders = sorted(feeder_measurements["feeder_id"].unique().tolist())
 
     rows: list[dict[str, object]] = []
     for transformer_id in ledger["transformer_id"]:

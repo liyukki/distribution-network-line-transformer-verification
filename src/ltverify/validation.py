@@ -38,9 +38,7 @@ class NetworkResultCheck:
     severity: str
 
 
-def check_solved_network(
-    net: object, cfg: ValidationConfig
-) -> NetworkResultCheck:
+def check_solved_network(net: object, cfg: ValidationConfig) -> NetworkResultCheck:
     """Inspect an already-solved network result frame.
 
     Power direction convention: supply (external grid plus sgen output)
@@ -65,9 +63,7 @@ def check_solved_network(
     maximum_loading = float(net.res_trafo.loading_percent.max())
     supply = net.res_ext_grid.p_mw.sum() + net.res_sgen.p_mw.sum()
     demand_and_losses = (
-        net.res_load.p_mw.sum()
-        + net.res_line.pl_mw.sum()
-        + net.res_trafo.pl_mw.sum()
+        net.res_load.p_mw.sum() + net.res_line.pl_mw.sum() + net.res_trafo.pl_mw.sum()
     )
     balance_error = abs(float(supply - demand_and_losses))
 
@@ -79,22 +75,18 @@ def check_solved_network(
         violation_types.append(violation_type)
         messages.append(message)
         severities.append(
-            "critical"
-            if violation_type in cfg.critical_violation_types
-            else "warning"
+            "critical" if violation_type in cfg.critical_violation_types else "warning"
         )
 
     if voltage_min_pu < cfg.voltage_min_pu:
         record(
             "voltage_out_of_bounds",
-            f"voltage below {cfg.voltage_min_pu} p.u.: "
-            f"minimum {voltage_min_pu:.4f} p.u.",
+            f"voltage below {cfg.voltage_min_pu} p.u.: minimum {voltage_min_pu:.4f} p.u.",
         )
     if voltage_max_pu > cfg.voltage_max_pu:
         record(
             "voltage_out_of_bounds",
-            f"voltage above {cfg.voltage_max_pu} p.u.: "
-            f"maximum {voltage_max_pu:.4f} p.u.",
+            f"voltage above {cfg.voltage_max_pu} p.u.: maximum {voltage_max_pu:.4f} p.u.",
         )
     if balance_error >= cfg.power_balance_tolerance_mw:
         record(

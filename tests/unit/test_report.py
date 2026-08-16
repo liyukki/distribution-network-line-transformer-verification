@@ -120,9 +120,7 @@ def test_report_manifest_output_contract(tmp_path: Path) -> None:
     run_dir = _fixture_run(tmp_path)
     custom_output = tmp_path / "custom_summary.json"
     custom_manifest = tmp_path / "custom.manifest.json"
-    generate_default_summary(
-        run_dir, custom_output, manifest_output=custom_manifest
-    )
+    generate_default_summary(run_dir, custom_output, manifest_output=custom_manifest)
     assert custom_manifest.exists()
     assert not (tmp_path / "default_manifest.json").exists()
     # 未指定时使用 <stem>.manifest.json
@@ -155,9 +153,7 @@ def test_tampered_snapshot_yields_integrity_error_not_parse_error(
     tmp_path: Path,
 ) -> None:
     run_dir = _fixture_run(tmp_path)
-    (run_dir / "config.snapshot.yaml").write_text(
-        "key: [unclosed", encoding="utf-8"
-    )
+    (run_dir / "config.snapshot.yaml").write_text("key: [unclosed", encoding="utf-8")
     with pytest.raises(ValueError, match="产物校验失败"):
         generate_default_summary(run_dir, tmp_path / "summary.json")
 

@@ -48,23 +48,15 @@ _ALL_FEATURE_NAMES = tuple(asdict(ScoreWeights()).keys())
 
 ABLATION_FEATURES = {
     "full": _ALL_FEATURE_NAMES,
-    "without_residual": tuple(
-        name for name in _ALL_FEATURE_NAMES if name != "residual_corr"
-    ),
-    "without_difference": tuple(
-        name for name in _ALL_FEATURE_NAMES if name != "diff_corr"
-    ),
+    "without_residual": tuple(name for name in _ALL_FEATURE_NAMES if name != "residual_corr"),
+    "without_difference": tuple(name for name in _ALL_FEATURE_NAMES if name != "diff_corr"),
     "without_rolling": tuple(
         name
         for name in _ALL_FEATURE_NAMES
         if name not in ("rolling_corr_median", "rolling_corr_q10")
     ),
-    "without_events": tuple(
-        name for name in _ALL_FEATURE_NAMES if name != "event_match"
-    ),
-    "without_power": tuple(
-        name for name in _ALL_FEATURE_NAMES if name != "active_power_corr"
-    ),
+    "without_events": tuple(name for name in _ALL_FEATURE_NAMES if name != "event_match"),
+    "without_power": tuple(name for name in _ALL_FEATURE_NAMES if name != "active_power_corr"),
 }
 
 _METRIC_COLUMNS = (
@@ -113,9 +105,7 @@ CURRENT_MANIFEST_NAME = "robustness_experiment_manifest.json"
 LEGACY_AGGREGATES_NAME = "experiment_aggregates.csv"
 LEGACY_SUMMARY_NAME = "experiment_summary.csv"
 
-REQUIRED_EXPERIMENT_OUTPUTS = frozenset(
-    {CURRENT_SUMMARY_NAME, CURRENT_AGGREGATES_NAME}
-)
+REQUIRED_EXPERIMENT_OUTPUTS = frozenset({CURRENT_SUMMARY_NAME, CURRENT_AGGREGATES_NAME})
 
 
 @dataclass(frozen=True)
@@ -174,10 +164,7 @@ def _apply_overrides(config: object, overrides: dict[str, object]) -> None:
 def _weights_for(enabled_features: tuple[str, ...]) -> ScoreWeights:
     defaults = asdict(ScoreWeights())
     return ScoreWeights(
-        **{
-            name: (defaults[name] if name in enabled_features else 0.0)
-            for name in defaults
-        }
+        **{name: (defaults[name] if name in enabled_features else 0.0) for name in defaults}
     )
 
 
@@ -198,26 +185,17 @@ def _run_case(
         simulation = simulate_time_series(artifacts, profiles, config.validation)
 
     if not simulation.failures.empty:
-        raise RuntimeError(
-            "simulation failures: "
-            f"{simulation.failures.head(3).to_dict('records')}"
-        )
+        raise RuntimeError(f"simulation failures: {simulation.failures.head(3).to_dict('records')}")
     if config.validation.terminate_on_critical and len(simulation.validation):
-        critical = simulation.validation[
-            simulation.validation["severity"] == "critical"
-        ]
+        critical = simulation.validation[simulation.validation["severity"] == "critical"]
         if len(critical):
-            raise RuntimeError(
-                "critical physical violations in experiment case"
-            )
+            raise RuntimeError("critical physical violations in experiment case")
 
     if cache_key not in cache:
         cache[cache_key] = (artifacts, profiles, simulation)
 
     truth = build_truth(artifacts)
-    ledger = corrupt_ledger(
-        truth, config.corruption.ledger_error_rate, seed=seed
-    )
+    ledger = corrupt_ledger(truth, config.corruption.ledger_error_rate, seed=seed)
     observed = disturb_measurements(
         simulation.transformer_measurements, config.corruption, seed=seed
     )
@@ -268,12 +246,8 @@ def _run_case(
             ),
             "non_convergence_count": type_counts["non_convergence"],
             "power_balance_count": type_counts["power_balance"],
-            "voltage_out_of_bounds_count": type_counts[
-                "voltage_out_of_bounds"
-            ],
-            "transformer_overload_count": type_counts[
-                "transformer_overload"
-            ],
+            "voltage_out_of_bounds_count": type_counts["voltage_out_of_bounds"],
+            "transformer_overload_count": type_counts["transformer_overload"],
             "voltage_min_pu": float(validation["voltage_min_pu"].min()),
             "voltage_max_pu": float(validation["voltage_max_pu"].max()),
             "maximum_transformer_loading_percent": float(
@@ -300,9 +274,7 @@ def _aggregate(summary: pd.DataFrame) -> pd.DataFrame:
     aggregates: list[dict[str, object]] = []
     completed = summary[summary["status"] == "completed"]
     for (family, value), group in summary.groupby(["family", "value"]):
-        succeeded = completed[
-            (completed["family"] == family) & (completed["value"] == value)
-        ]
+        succeeded = completed[(completed["family"] == family) & (completed["value"] == value)]
         row: dict[str, object] = {
             "family": family,
             "value": value,
@@ -398,9 +370,7 @@ def run_experiments(path: Path, output_dir: Path) -> Path:
         "experiment_config_snapshot": _portable(raw),
         "base_config_name": base_config_path.name,
         "base_config_sha256": _file_sha256(base_config_path),
-        "base_config_snapshot": _portable(
-            base_config.model_dump(mode="json")
-        ),
+        "base_config_snapshot": _portable(base_config.model_dump(mode="json")),
         "git_commit": git_commit(),
         "python_version": platform.python_version(),
         "package_versions": package_versions(),
@@ -412,17 +382,11 @@ def run_experiments(path: Path, output_dir: Path) -> Path:
             "failed": int((summary["status"] == "failed").sum()),
         },
         "output_files": {
-            CURRENT_SUMMARY_NAME: _file_sha256(
-                output_dir / CURRENT_SUMMARY_NAME
-            ),
-            CURRENT_AGGREGATES_NAME: _file_sha256(
-                output_dir / CURRENT_AGGREGATES_NAME
-            ),
+            CURRENT_SUMMARY_NAME: _file_sha256(output_dir / CURRENT_SUMMARY_NAME),
+            CURRENT_AGGREGATES_NAME: _file_sha256(output_dir / CURRENT_AGGREGATES_NAME),
         },
     }
-    write_json_atomic(
-        manifest, output_dir / CURRENT_MANIFEST_NAME
-    )
+    write_json_atomic(manifest, output_dir / CURRENT_MANIFEST_NAME)
     return output_dir
 
 
@@ -451,12 +415,8 @@ def verify_experiment_manifest(
     caller provides the original config paths, their file hashes must
     equal the recorded hashes.
     """
-    if require_source_configs and (
-        experiment_config_path is None or base_config_path is None
-    ):
-        raise ValueError(
-            "严格验证需要同时提供 experiment_config_path 和 base_config_path"
-        )
+    if require_source_configs and (experiment_config_path is None or base_config_path is None):
+        raise ValueError("严格验证需要同时提供 experiment_config_path 和 base_config_path")
     if not isinstance(manifest, dict):
         raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
             "实验清单顶层必须是 JSON object"
@@ -482,19 +442,13 @@ def verify_experiment_manifest(
             raise ValueError(f"output_files 哈希必须是 64 位十六进制: {text}")
         path = artifact_dir / text
         if not path.is_file():
-            raise ValueError(
-                f"experiment manifest 声明的文件不是普通文件: {text}"
-            )
+            raise ValueError(f"experiment manifest 声明的文件不是普通文件: {text}")
         try:
             actual = _file_sha256(path)
         except OSError as exc:
-            raise ValueError(
-                f"读取 experiment 产物哈希失败: {text}"
-            ) from exc
+            raise ValueError(f"读取 experiment 产物哈希失败: {text}") from exc
         if actual != expected:
-            raise ValueError(
-                f"实验产物校验失败: {text}（期望 {expected}，实际 {actual}）"
-            )
+            raise ValueError(f"实验产物校验失败: {text}（期望 {expected}，实际 {actual}）")
     for key in ("experiment_config_sha256", "base_config_sha256"):
         value = manifest.get(key)
         if not isinstance(value, str) or not _SHA256_PATTERN.match(value):
@@ -513,32 +467,22 @@ def verify_experiment_manifest(
         path = Path(experiment_config_path)
         if path.name != manifest["experiment_config_name"]:
             raise ValueError(
-                "experiment 配置 name 不一致: "
-                f"{path.name} != {manifest['experiment_config_name']}"
+                f"experiment 配置 name 不一致: {path.name} != {manifest['experiment_config_name']}"
             )
         if _file_sha256(path) != manifest["experiment_config_sha256"]:
-            raise ValueError(
-                f"experiment 配置 hash 不一致: {experiment_config_path}"
-            )
-        actual_snapshot = _portable(
-            yaml.safe_load(path.read_text(encoding="utf-8"))
-        )
+            raise ValueError(f"experiment 配置 hash 不一致: {experiment_config_path}")
+        actual_snapshot = _portable(yaml.safe_load(path.read_text(encoding="utf-8")))
         if actual_snapshot != manifest["experiment_config_snapshot"]:
             raise ValueError("experiment 配置 snapshot 与原始 YAML 不一致")
     if base_config_path is not None:
         path = Path(base_config_path)
         if path.name != manifest["base_config_name"]:
             raise ValueError(
-                "base 配置 name 不一致: "
-                f"{path.name} != {manifest['base_config_name']}"
+                f"base 配置 name 不一致: {path.name} != {manifest['base_config_name']}"
             )
         if _file_sha256(path) != manifest["base_config_sha256"]:
-            raise ValueError(
-                f"base 配置 hash 不一致: {base_config_path}"
-            )
-        actual_snapshot = _portable(
-            load_config(path).model_dump(mode="json")
-        )
+            raise ValueError(f"base 配置 hash 不一致: {base_config_path}")
+        actual_snapshot = _portable(load_config(path).model_dump(mode="json"))
         if actual_snapshot != manifest["base_config_snapshot"]:
             raise ValueError("base 配置 snapshot 与原始配置不一致")
     counts = manifest.get("case_counts")
@@ -559,22 +503,17 @@ def verify_experiment_manifest(
     failed = counts["failed"]
     if total != completed + failed:
         raise ValueError(
-            f"case_counts 不一致: total={total} != completed+failed="
-            f"{completed + failed}"
+            f"case_counts 不一致: total={total} != completed+failed={completed + failed}"
         )
     summary_path = artifact_dir / CURRENT_SUMMARY_NAME
     if not summary_path.exists():
         raise ValueError(f"缺少 {CURRENT_SUMMARY_NAME}")
     summary = pd.read_csv(summary_path)
     if len(summary) != total:
-        raise ValueError(
-            f"summary 行数 {len(summary)} 与 case_counts.total {total} 不一致"
-        )
+        raise ValueError(f"summary 行数 {len(summary)} 与 case_counts.total {total} 不一致")
     if "status" not in summary.columns:
         raise ValueError(f"{CURRENT_SUMMARY_NAME} 缺少 status 列")
-    unknown_statuses = sorted(
-        set(summary["status"].astype(str).unique()) - {"completed", "failed"}
-    )
+    unknown_statuses = sorted(set(summary["status"].astype(str).unique()) - {"completed", "failed"})
     if unknown_statuses:
         raise ValueError(f"summary status 存在未知值: {unknown_statuses}")
     actual_completed = int((summary["status"] == "completed").sum())

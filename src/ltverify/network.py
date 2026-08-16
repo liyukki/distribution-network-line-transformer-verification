@@ -89,9 +89,7 @@ def build_network(cfg: NetworkConfig) -> NetworkArtifacts:
         for position in range(1, cfg.transformers_per_feeder + 1):
             transformer_number = feeder_number * cfg.transformers_per_feeder + position
             transformer_id = f"T{transformer_number:03d}"
-            mv_bus = pp.create_bus(
-                net, vn_kv=cfg.mv_kv, name=f"{feeder_id}_s{position}_mv"
-            )
+            mv_bus = pp.create_bus(net, vn_kv=cfg.mv_kv, name=f"{feeder_id}_s{position}_mv")
             pp.create_line_from_parameters(
                 net,
                 prev_mv_bus,

@@ -49,9 +49,7 @@ def test_high_pv_scenario_produces_reverse_power() -> None:
 
 def test_simulation_records_per_timestep_validation() -> None:
     artifacts = build_network(NetworkConfig())
-    profiles = generate_profiles(
-        artifacts, ProfileConfig(days=1, interval_minutes=360), seed=42
-    )
+    profiles = generate_profiles(artifacts, ProfileConfig(days=1, interval_minutes=360), seed=42)
     result = simulate_time_series(artifacts, profiles, ValidationConfig())
     assert len(result.validation) == 4
     required = {
@@ -75,9 +73,7 @@ def test_init_falls_back_to_auto_after_non_convergence(monkeypatch) -> None:
     from ltverify import simulation as simulation_module
 
     artifacts = build_network(NetworkConfig())
-    profiles = generate_profiles(
-        artifacts, ProfileConfig(days=1, interval_minutes=360), seed=42
-    )
+    profiles = generate_profiles(artifacts, ProfileConfig(days=1, interval_minutes=360), seed=42)
     original = pp.runpp
     calls: list[str | None] = []
 

@@ -64,9 +64,7 @@ def _read_csv_safely(path: Path) -> pd.DataFrame:
         pd.errors.ParserError,
         pd.errors.EmptyDataError,
     ) as exc:
-        raise RobustnessLoadError(
-            f"无法解析 CSV: {path.name}: {exc}"
-        ) from exc
+        raise RobustnessLoadError(f"无法解析 CSV: {path.name}: {exc}") from exc
 
 
 def _normalize_aggregates(frame: pd.DataFrame) -> pd.DataFrame:
@@ -74,9 +72,7 @@ def _normalize_aggregates(frame: pd.DataFrame) -> pd.DataFrame:
         raise RobustnessLoadError("聚合 CSV 为空")
     missing = sorted({"family", "value"} - set(frame.columns))
     if missing:
-        raise RobustnessLoadError(
-            f"聚合 CSV 缺少必要列: {missing}"
-        )
+        raise RobustnessLoadError(f"聚合 CSV 缺少必要列: {missing}")
     if frame["family"].isna().any():
         raise RobustnessLoadError("聚合 CSV 的 family 列含缺失值")
     family = frame["family"].astype(str).str.strip()
@@ -100,9 +96,7 @@ def _normalize_aggregates(frame: pd.DataFrame) -> pd.DataFrame:
         if converted[non_null_original].isna().any():
             raise RobustnessLoadError(f"{column} 含非数值")
         if converted.notna().any():
-            finite = np.isfinite(
-                converted[converted.notna()].to_numpy(dtype=float)
-            )
+            finite = np.isfinite(converted[converted.notna()].to_numpy(dtype=float))
             if not finite.all():
                 raise RobustnessLoadError(f"{column} 含非有限数值")
             if column.startswith("std_") and (converted < 0).any():
@@ -121,9 +115,7 @@ def _normalize_summary(frame: pd.DataFrame) -> pd.DataFrame:
         raise RobustnessLoadError("案例明细 CSV 的 status 列含空白值")
     unknown = sorted(set(status) - {"completed", "failed"})
     if unknown:
-        raise RobustnessLoadError(
-            f"案例明细 CSV 含未知状态: {unknown}"
-        )
+        raise RobustnessLoadError(f"案例明细 CSV 含未知状态: {unknown}")
     normalized = frame.copy()
     normalized["status"] = status.to_numpy()
     return normalized
@@ -152,9 +144,7 @@ def load_robustness_artifacts(
         resolved_summary = Path(summary_path)
         _ensure_regular_file(resolved_summary)
         if resolved_summary.parent.resolve() != aggregates_path.parent.resolve():
-            raise RobustnessLoadError(
-                "aggregates 与 summary 必须来自同一实验目录"
-            )
+            raise RobustnessLoadError("aggregates 与 summary 必须来自同一实验目录")
 
     if aggregates_path.name == CURRENT_AGGREGATES_NAME:
         return _load_current(
@@ -180,12 +170,8 @@ def _load_current(
     experiment_config_path: Path | None,
     base_config_path: Path | None,
 ) -> RobustnessArtifacts:
-    if resolved_summary is not None and (
-        resolved_summary.name != CURRENT_SUMMARY_NAME
-    ):
-        raise RobustnessLoadError(
-            f"当前命名 aggregate 必须搭配 {CURRENT_SUMMARY_NAME}"
-        )
+    if resolved_summary is not None and (resolved_summary.name != CURRENT_SUMMARY_NAME):
+        raise RobustnessLoadError(f"当前命名 aggregate 必须搭配 {CURRENT_SUMMARY_NAME}")
     artifact_dir = aggregates_path.parent
     manifest_path = artifact_dir / CURRENT_MANIFEST_NAME
     if not manifest_path.is_file():
@@ -196,21 +182,15 @@ def _load_current(
     try:
         manifest = read_json(manifest_path)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise RobustnessLoadError(
-            f"实验清单解析失败: {exc}"
-        ) from exc
+        raise RobustnessLoadError(f"实验清单解析失败: {exc}") from exc
     if not isinstance(manifest, dict):
         raise RobustnessLoadError("实验清单顶层必须是 JSON object")
 
     effective_summary = (
-        resolved_summary
-        if resolved_summary is not None
-        else artifact_dir / CURRENT_SUMMARY_NAME
+        resolved_summary if resolved_summary is not None else artifact_dir / CURRENT_SUMMARY_NAME
     )
     if effective_summary.name != CURRENT_SUMMARY_NAME:
-        raise RobustnessLoadError(
-            f"当前命名 summary 必须是 {CURRENT_SUMMARY_NAME}"
-        )
+        raise RobustnessLoadError(f"当前命名 summary 必须是 {CURRENT_SUMMARY_NAME}")
 
     try:
         verify_experiment_manifest(
@@ -219,9 +199,7 @@ def _load_current(
             require_source_configs=False,
         )
     except (ValueError, TypeError, OSError, UnicodeError) as exc:
-        raise RobustnessLoadError(
-            f"实验产物哈希一致性校验失败: {exc}"
-        ) from exc
+        raise RobustnessLoadError(f"实验产物哈希一致性校验失败: {exc}") from exc
 
     aggregates = _normalize_aggregates(_read_csv_safely(aggregates_path))
     summary: pd.DataFrame | None = None
@@ -266,12 +244,8 @@ def _load_legacy(
     aggregates_path: Path,
     resolved_summary: Path | None,
 ) -> RobustnessArtifacts:
-    if resolved_summary is not None and (
-        resolved_summary.name != LEGACY_SUMMARY_NAME
-    ):
-        raise RobustnessLoadError(
-            f"旧命名 aggregate 必须搭配 {LEGACY_SUMMARY_NAME}"
-        )
+    if resolved_summary is not None and (resolved_summary.name != LEGACY_SUMMARY_NAME):
+        raise RobustnessLoadError(f"旧命名 aggregate 必须搭配 {LEGACY_SUMMARY_NAME}")
     aggregates = _normalize_aggregates(_read_csv_safely(aggregates_path))
     summary: pd.DataFrame | None = None
     if resolved_summary is not None:

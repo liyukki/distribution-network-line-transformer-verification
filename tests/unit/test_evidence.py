@@ -177,9 +177,7 @@ def test_experiment_manifest_rejects_unknown_status_in_summary(
         "\\\\server\\share\\evil.csv",
     ],
 )
-def test_experiment_manifest_rejects_unsafe_output_names(
-    tmp_path: Path, unsafe: str
-) -> None:
+def test_experiment_manifest_rejects_unsafe_output_names(tmp_path: Path, unsafe: str) -> None:
     import pandas as pd
 
     summary = pd.DataFrame({"case_id": ["a"], "status": ["completed"]})

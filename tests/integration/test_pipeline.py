@@ -114,9 +114,7 @@ def test_pipeline_stops_on_critical_violation(monkeypatch) -> None:
             ),
         )
 
-    monkeypatch.setattr(
-        pipeline_module, "simulate_time_series", violating_simulate
-    )
+    monkeypatch.setattr(pipeline_module, "simulate_time_series", violating_simulate)
     with pytest.raises(RuntimeError, match="critical physical violations"):
         run_pipeline(Path("tests/fixtures/small_config.yaml"))
 
@@ -142,15 +140,11 @@ def test_base_case_warning_violations_do_not_stop_pipeline(monkeypatch) -> None:
     metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
     assert metrics["base_case_violation_count"] == 1
     assert metrics["base_case_violation_types"] == ["transformer_overload"]
-    assert metrics["base_case_violations"] == [
-        "transformer overload: trafo 1 at 110.0%"
-    ]
+    assert metrics["base_case_violations"] == ["transformer overload: trafo 1 at 110.0%"]
     assert metrics["base_case_severity"] == "warning"
 
 
-def test_critical_base_case_with_terminate_off_is_recorded(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_critical_base_case_with_terminate_off_is_recorded(tmp_path: Path, monkeypatch) -> None:
     from ltverify import pipeline as pipeline_module
     from ltverify.validation import PowerFlowValidation
 
@@ -207,9 +201,7 @@ output_root: {tmp_path.as_posix()}
     metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
     assert metrics["base_case_severity"] == "critical"
     assert metrics["base_case_violation_count"] == 1
-    assert metrics["base_case_violations"] == [
-        "transformer overload: trafo 1 at 150.0%"
-    ]
+    assert metrics["base_case_violations"] == ["transformer overload: trafo 1 at 150.0%"]
 
 
 def test_critical_base_case_terminate_writes_structured_failure_summary(
@@ -267,9 +259,7 @@ output_root: {tmp_path.as_posix()}
         encoding="utf-8",
     )
     monkeypatch.setattr(pipeline_module, "run_static_validation", critical_static)
-    monkeypatch.setattr(
-        pipeline_module, "_run_directory", lambda _: Path("base-failure-run")
-    )
+    monkeypatch.setattr(pipeline_module, "_run_directory", lambda _: Path("base-failure-run"))
     with pytest.raises(RuntimeError, match="critical base-case"):
         run_pipeline(config)
 
@@ -278,19 +268,14 @@ output_root: {tmp_path.as_posix()}
     assert manifest["status"] == "failed"
     assert (run_dir / "config.snapshot.yaml").exists()
     assert "config.snapshot.yaml" in manifest["output_paths"]
-    assert (
-        manifest["output_sha256"]["config.snapshot.yaml"]
-        == manifest["config_sha256"]
-    )
+    assert manifest["output_sha256"]["config.snapshot.yaml"] == manifest["config_sha256"]
     verify_manifest_hashes(manifest, run_dir)
     failure = manifest["failure_summary"]
     assert failure["stage"] == "base_case_validation"
     assert failure["severity"] == "critical"
     assert failure["violation_count"] == 1
     assert failure["violation_types"] == ["transformer_overload"]
-    assert failure["violations"] == [
-        "transformer overload: trafo 1 at 150.0%"
-    ]
+    assert failure["violations"] == ["transformer overload: trafo 1 at 150.0%"]
     assert failure["error_type"] == "RuntimeError"
     assert "message" in failure
 
@@ -301,9 +286,7 @@ def test_non_converged_base_case_writes_self_verifying_failed_manifest(
     from ltverify import pipeline as pipeline_module
     from ltverify.validation import PowerFlowValidation
 
-    def non_converged_static(
-        *args: object, **kwargs: object
-    ) -> PowerFlowValidation:
+    def non_converged_static(*args: object, **kwargs: object) -> PowerFlowValidation:
         return PowerFlowValidation(
             converged=False,
             voltage_min_pu=float("nan"),
@@ -315,12 +298,8 @@ def test_non_converged_base_case_writes_self_verifying_failed_manifest(
         )
 
     config = _write_temp_config(tmp_path, "nonconverged.yaml")
-    monkeypatch.setattr(
-        pipeline_module, "run_static_validation", non_converged_static
-    )
-    monkeypatch.setattr(
-        pipeline_module, "_run_directory", lambda _: Path("nonconverged-run")
-    )
+    monkeypatch.setattr(pipeline_module, "run_static_validation", non_converged_static)
+    monkeypatch.setattr(pipeline_module, "_run_directory", lambda _: Path("nonconverged-run"))
     with pytest.raises(RuntimeError, match="did not converge"):
         run_pipeline(config)
 
@@ -329,10 +308,7 @@ def test_non_converged_base_case_writes_self_verifying_failed_manifest(
     assert manifest["status"] == "failed"
     assert (run_dir / "config.snapshot.yaml").exists()
     assert "config.snapshot.yaml" in manifest["output_paths"]
-    assert (
-        manifest["output_sha256"]["config.snapshot.yaml"]
-        == manifest["config_sha256"]
-    )
+    assert manifest["output_sha256"]["config.snapshot.yaml"] == manifest["config_sha256"]
     verify_manifest_hashes(manifest, run_dir)
     failure = manifest["failure_summary"]
     assert failure["stage"] == "base_case_validation"
@@ -350,9 +326,7 @@ def test_later_exception_after_base_case_writes_self_verifying_failed_manifest(
 
     config = _write_temp_config(tmp_path, "later.yaml")
     monkeypatch.setattr(pipeline_module, "simulate_time_series", failing_simulate)
-    monkeypatch.setattr(
-        pipeline_module, "_run_directory", lambda _: Path("later-failure-run")
-    )
+    monkeypatch.setattr(pipeline_module, "_run_directory", lambda _: Path("later-failure-run"))
     with pytest.raises(RuntimeError, match="probe"):
         run_pipeline(config)
 
@@ -361,10 +335,7 @@ def test_later_exception_after_base_case_writes_self_verifying_failed_manifest(
     assert manifest["status"] == "failed"
     assert (run_dir / "config.snapshot.yaml").exists()
     assert "config.snapshot.yaml" in manifest["output_paths"]
-    assert (
-        manifest["output_sha256"]["config.snapshot.yaml"]
-        == manifest["config_sha256"]
-    )
+    assert manifest["output_sha256"]["config.snapshot.yaml"] == manifest["config_sha256"]
     verify_manifest_hashes(manifest, run_dir)
     failure = manifest["failure_summary"]
     assert failure["error_type"] == "RuntimeError"
@@ -423,12 +394,8 @@ def test_interrupted_run_leaves_self_verifying_running_manifest(
         raise exc
 
     config = _write_temp_config(tmp_path, "interrupt.yaml")
-    monkeypatch.setattr(
-        pipeline_module, "build_network", interrupted_build_network
-    )
-    monkeypatch.setattr(
-        pipeline_module, "_run_directory", lambda _: Path("interrupt-run")
-    )
+    monkeypatch.setattr(pipeline_module, "build_network", interrupted_build_network)
+    monkeypatch.setattr(pipeline_module, "_run_directory", lambda _: Path("interrupt-run"))
     with pytest.raises(type(exc), match=match):
         run_pipeline(config)
 
@@ -437,8 +404,5 @@ def test_interrupted_run_leaves_self_verifying_running_manifest(
     assert manifest["status"] == "running"
     assert (run_dir / "config.snapshot.yaml").exists()
     assert "config.snapshot.yaml" in manifest["output_paths"]
-    assert (
-        manifest["output_sha256"]["config.snapshot.yaml"]
-        == manifest["config_sha256"]
-    )
+    assert manifest["output_sha256"]["config.snapshot.yaml"] == manifest["config_sha256"]
     verify_manifest_hashes(manifest, run_dir)

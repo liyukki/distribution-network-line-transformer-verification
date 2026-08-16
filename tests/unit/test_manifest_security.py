@@ -81,9 +81,7 @@ def test_coordinated_artifact_and_manifest_hash_is_internal_consistency(
     snapshot = tmp_path / "config.snapshot.yaml"
     snapshot.write_text("key: value\n", encoding="utf-8")
     artifact = tmp_path / "metrics.json"
-    artifact.write_text(
-        json.dumps({"f1": 0.999999}), encoding="utf-8"
-    )
+    artifact.write_text(json.dumps({"f1": 0.999999}), encoding="utf-8")
     manifest = {
         "output_paths": ["config.snapshot.yaml", "metrics.json"],
         "output_sha256": {
@@ -95,8 +93,6 @@ def test_coordinated_artifact_and_manifest_hash_is_internal_consistency(
     }
     # Coordinated rewrite of artifact + manifest hash is internally
     # consistent; this is exactly why checksums are not authenticity.
-    artifact.write_text(
-        json.dumps({"f1": 0.999999}), encoding="utf-8"
-    )
+    artifact.write_text(json.dumps({"f1": 0.999999}), encoding="utf-8")
     manifest["output_sha256"]["metrics.json"] = file_sha256(artifact)
     verify_manifest_hashes(manifest, tmp_path)

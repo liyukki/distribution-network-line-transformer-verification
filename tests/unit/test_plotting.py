@@ -87,8 +87,6 @@ def test_robustness_line_figure() -> None:
 
 
 def test_robustness_line_figure_validates_aggregate_columns() -> None:
-    summary = pd.DataFrame(
-        {"family": ["missing_rate"], "value": ["0.0"], "f1": [0.9]}
-    )
+    summary = pd.DataFrame({"family": ["missing_rate"], "value": ["0.0"], "f1": [0.9]})
     with pytest.raises(ValueError, match="mean_f1"):
         robustness_line_figure(summary, "missing_rate", "f1")

@@ -47,9 +47,7 @@ def confusion_matrix_figure(matrix: np.ndarray) -> go.Figure:
     return figure
 
 
-def voltage_curves_figure(
-    voltage_wide: pd.DataFrame, transformer_ids: list[str]
-) -> go.Figure:
+def voltage_curves_figure(voltage_wide: pd.DataFrame, transformer_ids: list[str]) -> go.Figure:
     """Overlaid per-transformer voltage curves on a shared time axis."""
     figure = go.Figure()
     for transformer_id in transformer_ids:
@@ -71,18 +69,13 @@ def voltage_curves_figure(
     return figure
 
 
-def candidate_score_bars_figure(
-    scores: pd.DataFrame, transformer_id: str
-) -> go.Figure:
+def candidate_score_bars_figure(scores: pd.DataFrame, transformer_id: str) -> go.Figure:
     """Bar chart of candidate feeder scores for one transformer."""
     figure = go.Figure(
         go.Bar(
             x=scores["candidate_feeder_id"],
             y=scores["enhanced_score"],
-            marker={"color": [
-                feeder_color(feeder)
-                for feeder in scores["candidate_feeder_id"]
-            ]},
+            marker={"color": [feeder_color(feeder) for feeder in scores["candidate_feeder_id"]]},
         )
     )
     figure.update_layout(
@@ -128,9 +121,7 @@ def topology_figure(
     for _, edge in edges.iterrows():
         start = positions[edge["from_node"]]
         end = positions[edge["to_node"]]
-        color = feeder_color(
-            edge["feeder_id"], neutral=not color_edges_by_feeder
-        )
+        color = feeder_color(edge["feeder_id"], neutral=not color_edges_by_feeder)
         figure.add_trace(
             go.Scatter(
                 x=[start[0], end[0]],
@@ -179,9 +170,7 @@ def pr_curve_figure(precision: list[float], recall: list[float]) -> go.Figure:
     return figure
 
 
-def robustness_line_figure(
-    summary: pd.DataFrame, family: str, metric: str
-) -> go.Figure:
+def robustness_line_figure(summary: pd.DataFrame, family: str, metric: str) -> go.Figure:
     """Mean plus/minus one sample standard deviation across experiment levels.
 
     Requires the aggregate product (robustness_aggregates.csv; legacy

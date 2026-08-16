@@ -71,9 +71,7 @@ def _write_experiment_dir(tmp_path: Path) -> Path:
     return experiment_dir
 
 
-def _write_discoverable_experiment(
-    root: Path, dir_name: str, *, current: bool
-) -> Path:
+def _write_discoverable_experiment(root: Path, dir_name: str, *, current: bool) -> Path:
     experiment_dir = root / "runs" / dir_name
     experiment_dir.mkdir(parents=True, exist_ok=True)
     prefix = "robustness_" if current else "experiment_"
@@ -124,9 +122,7 @@ def _artifacts_with_schema(
         manifest["artifact_schema_version"] = version
     predictions = artifacts.predictions
     if drop_predictions_columns:
-        predictions = predictions.drop(
-            columns=list(drop_predictions_columns), errors="ignore"
-        )
+        predictions = predictions.drop(columns=list(drop_predictions_columns), errors="ignore")
     return RunArtifacts(
         run_dir=artifacts.run_dir,
         manifest=manifest,
@@ -151,9 +147,7 @@ def run_dir() -> Path:
 def test_data_pages_render_without_exceptions(run_dir: Path) -> None:
     artifacts = load_run_artifacts(run_dir)
     for page in DATA_PAGES:
-        app_test = AppTest.from_file(
-            ROOT / "app" / "pages" / page, default_timeout=120
-        )
+        app_test = AppTest.from_file(ROOT / "app" / "pages" / page, default_timeout=120)
         app_test.session_state["artifacts"] = artifacts
         app_test.session_state["demo_mode"] = True
         app_test.run()
@@ -181,9 +175,7 @@ def test_robustness_page_renders_with_tmp_aggregates(tmp_path: Path) -> None:
     )
     csv_path = tmp_path / "experiment_aggregates.csv"
     aggregates.to_csv(csv_path, index=False)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(csv_path))
     app_test.text_input[1].set_value("")
@@ -193,9 +185,7 @@ def test_robustness_page_renders_with_tmp_aggregates(tmp_path: Path) -> None:
     assert len(app_test.get("plotly_chart")) >= 1
 
 
-def test_robustness_page_auto_detects_legacy_aggregates(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_robustness_page_auto_detects_legacy_aggregates(tmp_path: Path, monkeypatch) -> None:
     metrics = [
         "precision",
         "recall",
@@ -219,9 +209,7 @@ def test_robustness_page_auto_detects_legacy_aggregates(
     aggregates.to_csv(legacy_csv, index=False)
 
     monkeypatch.chdir(tmp_path)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     raised = [element.value for element in app_test.exception]
     assert len(app_test.exception) == 0, raised
@@ -249,9 +237,7 @@ def test_robustness_page_skips_incomplete_current_and_prefers_legacy(
     aggregates.to_csv(legacy_csv, index=False)
 
     monkeypatch.chdir(tmp_path)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     raised = [element.value for element in app_test.exception]
     assert len(app_test.exception) == 0, raised
@@ -281,59 +267,33 @@ def test_robustness_page_does_not_mix_new_aggregates_with_legacy_summary(
     aggregates.to_csv(legacy_dir / "experiment_summary.csv", index=False)
 
     monkeypatch.chdir(tmp_path)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     raised = [element.value for element in app_test.exception]
     assert len(app_test.exception) == 0, raised
-    assert (
-        Path(app_test.text_input[0].value).resolve()
-        == legacy_dir / "experiment_aggregates.csv"
-    )
-    assert (
-        Path(app_test.text_input[1].value).resolve()
-        == legacy_dir / "experiment_summary.csv"
-    )
+    assert Path(app_test.text_input[0].value).resolve() == legacy_dir / "experiment_aggregates.csv"
+    assert Path(app_test.text_input[1].value).resolve() == legacy_dir / "experiment_summary.csv"
 
 
-def test_default_discovery_skips_incomplete_current_dir(
-    tmp_path: Path, monkeypatch
-) -> None:
-    new_dir = _write_discoverable_experiment(
-        tmp_path, "experiments-20260816T200000", current=True
-    )
+def test_default_discovery_skips_incomplete_current_dir(tmp_path: Path, monkeypatch) -> None:
+    new_dir = _write_discoverable_experiment(tmp_path, "experiments-20260816T200000", current=True)
     (new_dir / "robustness_summary.csv").unlink()
     (new_dir / "robustness_experiment_manifest.json").unlink()
-    old_dir = _write_discoverable_experiment(
-        tmp_path, "experiments-20260816T100000", current=True
-    )
+    old_dir = _write_discoverable_experiment(tmp_path, "experiments-20260816T100000", current=True)
     monkeypatch.chdir(tmp_path)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
-    assert (
-        Path(app_test.text_input[0].value).resolve()
-        == old_dir / "robustness_aggregates.csv"
-    )
+    assert Path(app_test.text_input[0].value).resolve() == old_dir / "robustness_aggregates.csv"
 
 
 def test_default_discovery_falls_back_to_legacy_when_no_complete_current(
     tmp_path: Path, monkeypatch
 ) -> None:
-    legacy_dir = _write_discoverable_experiment(
-        tmp_path, "experiments-legacy", current=False
-    )
+    legacy_dir = _write_discoverable_experiment(tmp_path, "experiments-legacy", current=False)
     monkeypatch.chdir(tmp_path)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
-    assert (
-        Path(app_test.text_input[0].value).resolve()
-        == legacy_dir / "experiment_aggregates.csv"
-    )
+    assert Path(app_test.text_input[0].value).resolve() == legacy_dir / "experiment_aggregates.csv"
 
 
 def test_robustness_page_lists_complete_metrics(tmp_path: Path) -> None:
@@ -360,9 +320,7 @@ def test_robustness_page_lists_complete_metrics(tmp_path: Path) -> None:
     )
     csv_path = tmp_path / "experiment_aggregates.csv"
     aggregates.to_csv(csv_path, index=False)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(csv_path))
     app_test.text_input[1].set_value("")
@@ -371,7 +329,9 @@ def test_robustness_page_lists_complete_metrics(tmp_path: Path) -> None:
     for metric in ("pr_auc", "pr_auc_scored", "scored_coverage", "insufficient_data_rate"):
         assert metric in options, f"缺少指标选项: {metric}"
     # 每个新增指标至少渲染一次且不崩溃（含全空值情形）
-    for index, metric in enumerate(("pr_auc", "pr_auc_scored", "scored_coverage", "insufficient_data_rate")):
+    for index, metric in enumerate(
+        ("pr_auc", "pr_auc_scored", "scored_coverage", "insufficient_data_rate")
+    ):
         app_test.selectbox[1].set_value(metric)
         app_test.run()
         raised = [element.value for element in app_test.exception]
@@ -386,14 +346,10 @@ def test_robustness_page_lists_complete_metrics(tmp_path: Path) -> None:
         "",
     ],
 )
-def test_robustness_page_handles_bad_aggregates(
-    tmp_path: Path, content: str
-) -> None:
+def test_robustness_page_handles_bad_aggregates(tmp_path: Path, content: str) -> None:
     path = tmp_path / "experiment_aggregates.csv"
     path.write_text(content, encoding="utf-8")
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(path))
     app_test.text_input[1].set_value("")
@@ -408,9 +364,7 @@ def test_robustness_page_handles_non_numeric_metric(tmp_path: Path) -> None:
     aggregates["mean_precision"] = "abc"
     path = tmp_path / "experiment_aggregates.csv"
     aggregates.to_csv(path, index=False)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(path))
     app_test.text_input[1].set_value("")
@@ -423,9 +377,7 @@ def test_robustness_page_handles_non_numeric_metric(tmp_path: Path) -> None:
 def test_robustness_page_rejects_directory_path(tmp_path: Path) -> None:
     path = tmp_path / "aggregates_dir"
     path.mkdir()
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(path))
     app_test.text_input[1].set_value("")
@@ -441,12 +393,10 @@ def test_robustness_page_handles_legacy_summary_missing_status(
     aggregates_path = tmp_path / "experiment_aggregates.csv"
     _valid_aggregates_frame().to_csv(aggregates_path, index=False)
     summary_path = tmp_path / "experiment_summary.csv"
-    pd.DataFrame(
-        {"case_id": ["a"], "family": ["x"], "value": ["1"]}
-    ).to_csv(summary_path, index=False)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    pd.DataFrame({"case_id": ["a"], "family": ["x"], "value": ["1"]}).to_csv(
+        summary_path, index=False
     )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(aggregates_path))
     app_test.run()
@@ -472,9 +422,7 @@ def test_robustness_page_rejects_legacy_summary_unknown_status(
             "status": ["mystery"],
         }
     ).to_csv(summary_path, index=False)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(aggregates_path))
     app_test.run()
@@ -493,9 +441,7 @@ def test_robustness_page_rejects_tampered_current_artifacts(
     aggregates_path = experiment_dir / "robustness_aggregates.csv"
     with aggregates_path.open("a", encoding="utf-8") as handle:
         handle.write("tampered")
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(aggregates_path))
     app_test.text_input[1].set_value("")
@@ -512,9 +458,7 @@ def test_robustness_page_renders_verified_current_artifacts(
     experiment_dir = _write_experiment_dir(tmp_path)
     aggregates_path = experiment_dir / "robustness_aggregates.csv"
     summary_path = experiment_dir / "robustness_summary.csv"
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(aggregates_path))
     app_test.text_input[1].set_value(str(summary_path))
@@ -532,9 +476,7 @@ def test_robustness_page_rejects_tampered_current_summary(
     summary_path = experiment_dir / "robustness_summary.csv"
     with summary_path.open("a", encoding="utf-8") as handle:
         handle.write("tampered")
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(experiment_dir / "robustness_aggregates.csv"))
     app_test.text_input[1].set_value(str(summary_path))
@@ -552,9 +494,7 @@ def test_robustness_page_rejects_invalid_current_manifest_json(
     (experiment_dir / "robustness_experiment_manifest.json").write_text(
         "{not json", encoding="utf-8"
     )
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(experiment_dir / "robustness_aggregates.csv"))
     app_test.text_input[1].set_value("")
@@ -578,9 +518,7 @@ def test_robustness_page_rejects_current_manifest_missing_core_hash(
         json_module.dumps(manifest, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(experiment_dir / "robustness_aggregates.csv"))
     app_test.text_input[1].set_value("")
@@ -595,19 +533,11 @@ def test_robustness_page_rejects_non_object_manifest(
     tmp_path: Path,
 ) -> None:
     experiment_dir = _write_experiment_dir(tmp_path)
-    (experiment_dir / "robustness_experiment_manifest.json").write_text(
-        "[]", encoding="utf-8"
-    )
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    (experiment_dir / "robustness_experiment_manifest.json").write_text("[]", encoding="utf-8")
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
-    app_test.text_input[0].set_value(
-        str(experiment_dir / "robustness_aggregates.csv")
-    )
-    app_test.text_input[1].set_value(
-        str(experiment_dir / "robustness_summary.csv")
-    )
+    app_test.text_input[0].set_value(str(experiment_dir / "robustness_aggregates.csv"))
+    app_test.text_input[1].set_value(str(experiment_dir / "robustness_summary.csv"))
     app_test.run()
     raised = [element.value for element in app_test.exception]
     assert len(app_test.exception) == 0, raised
@@ -620,9 +550,7 @@ def test_robustness_page_handles_blank_family(tmp_path: Path) -> None:
     aggregates.loc[1, "family"] = "   "
     path = tmp_path / "experiment_aggregates.csv"
     aggregates.to_csv(path, index=False)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(path))
     app_test.text_input[1].set_value("")
@@ -638,9 +566,7 @@ def test_robustness_page_handles_non_finite_metric(tmp_path: Path) -> None:
     aggregates["mean_precision"] = [float("inf"), 0.8]
     path = tmp_path / "experiment_aggregates.csv"
     aggregates.to_csv(path, index=False)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(path))
     app_test.text_input[1].set_value("")
@@ -656,9 +582,7 @@ def test_robustness_page_legacy_shows_unverified_warning(
 ) -> None:
     aggregates_path = tmp_path / "experiment_aggregates.csv"
     _valid_aggregates_frame().to_csv(aggregates_path, index=False)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120)
     app_test.run()
     app_test.text_input[0].set_value(str(aggregates_path))
     app_test.text_input[1].set_value("")
@@ -708,13 +632,9 @@ def test_schema_three_state_branches(run_dir: Path) -> None:
     assert any("未验证" in text for text in run_with_schema(3))
 
 
-def test_legacy_run_page_4_shows_warning_without_crash(
-    run_dir: Path, monkeypatch
-) -> None:
+def test_legacy_run_page_4_shows_warning_without_crash(run_dir: Path, monkeypatch) -> None:
     artifacts = load_run_artifacts(run_dir)
-    legacy_predictions = artifacts.predictions.drop(
-        columns=["anomaly_score"], errors="ignore"
-    )
+    legacy_predictions = artifacts.predictions.drop(columns=["anomaly_score"], errors="ignore")
     legacy_manifest = dict(artifacts.manifest)
     legacy_manifest["artifact_schema_version"] = 1
     legacy = RunArtifacts(
@@ -731,9 +651,7 @@ def test_legacy_run_page_4_shows_warning_without_crash(
         network_nodes=artifacts.network_nodes,
         network_edges=artifacts.network_edges,
     )
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "4_evaluation.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "4_evaluation.py", default_timeout=120)
     app_test.session_state["artifacts"] = legacy
     app_test.session_state["demo_mode"] = True
     app_test.run()
@@ -746,14 +664,10 @@ def test_legacy_run_page_4_shows_warning_without_crash(
 
 
 @pytest.mark.parametrize("version", [2.5, float("inf"), True])
-def test_invalid_schema_page_errors_without_plotly(
-    run_dir: Path, version: object
-) -> None:
+def test_invalid_schema_page_errors_without_plotly(run_dir: Path, version: object) -> None:
     artifacts = load_run_artifacts(run_dir)
     target = _artifacts_with_schema(artifacts, version)
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "4_evaluation.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "4_evaluation.py", default_timeout=120)
     app_test.session_state["artifacts"] = target
     app_test.session_state["demo_mode"] = True
     app_test.run()
@@ -773,9 +687,7 @@ def test_newer_schema_page_keeps_basic_chart_and_skips_pr(
         3,
         drop_predictions_columns=("anomaly_score", "reported_feeder_id"),
     )
-    app_test = AppTest.from_file(
-        ROOT / "app" / "pages" / "4_evaluation.py", default_timeout=120
-    )
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "4_evaluation.py", default_timeout=120)
     app_test.session_state["artifacts"] = target
     app_test.session_state["demo_mode"] = True
     app_test.run()

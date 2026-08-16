@@ -63,9 +63,7 @@ def test_authoritative_current_names_are_single_source() -> None:
     assert CURRENT_SUMMARY_NAME == "robustness_summary.csv"
 
 
-def test_case_with_simulation_failure_is_not_completed(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_case_with_simulation_failure_is_not_completed(monkeypatch, tmp_path: Path) -> None:
     import pandas as pd
 
     from ltverify.config import NetworkConfig, ProfileConfig, ValidationConfig
@@ -75,9 +73,7 @@ def test_case_with_simulation_failure_is_not_completed(
     from ltverify.simulation import SimulationResult, simulate_time_series
 
     artifacts = build_network(NetworkConfig(transformers_per_feeder=3))
-    profiles = generate_profiles(
-        artifacts, ProfileConfig(days=1, interval_minutes=360), seed=42
-    )
+    profiles = generate_profiles(artifacts, ProfileConfig(days=1, interval_minutes=360), seed=42)
     good = simulate_time_series(artifacts, profiles, ValidationConfig())
 
     def failing_simulate(*args: object, **kwargs: object) -> SimulationResult:
@@ -95,9 +91,7 @@ def test_case_with_simulation_failure_is_not_completed(
             ),
         )
 
-    monkeypatch.setattr(
-        "ltverify.experiments.simulate_time_series", failing_simulate
-    )
+    monkeypatch.setattr("ltverify.experiments.simulate_time_series", failing_simulate)
     base = tmp_path / "small_base.yaml"
     base.write_text(
         f"""random_seed: 42
@@ -147,9 +141,7 @@ output_root: {tmp_path.as_posix()}
     assert (summary["status"] == "failed").all()
 
 
-def test_case_with_critical_violation_is_not_completed(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_case_with_critical_violation_is_not_completed(monkeypatch, tmp_path: Path) -> None:
     import pandas as pd
 
     from ltverify.config import NetworkConfig, ProfileConfig, ValidationConfig
@@ -159,9 +151,7 @@ def test_case_with_critical_violation_is_not_completed(
     from ltverify.simulation import SimulationResult, simulate_time_series
 
     artifacts = build_network(NetworkConfig(transformers_per_feeder=3))
-    profiles = generate_profiles(
-        artifacts, ProfileConfig(days=1, interval_minutes=360), seed=42
-    )
+    profiles = generate_profiles(artifacts, ProfileConfig(days=1, interval_minutes=360), seed=42)
     good = simulate_time_series(artifacts, profiles, ValidationConfig())
 
     def violating_simulate(*args: object, **kwargs: object) -> SimulationResult:
@@ -186,9 +176,7 @@ def test_case_with_critical_violation_is_not_completed(
             ),
         )
 
-    monkeypatch.setattr(
-        "ltverify.experiments.simulate_time_series", violating_simulate
-    )
+    monkeypatch.setattr("ltverify.experiments.simulate_time_series", violating_simulate)
     base = tmp_path / "small_base.yaml"
     base.write_text(
         f"""random_seed: 42
@@ -241,9 +229,7 @@ seeds: [42]
     assert (summary["status"] == "failed").all()
 
 
-def test_base_config_resolves_relative_to_experiment_yaml(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_base_config_resolves_relative_to_experiment_yaml(tmp_path: Path, monkeypatch) -> None:
     import json
 
     from ltverify.experiments import run_experiments
@@ -301,6 +287,7 @@ output_root: {tmp_path.as_posix()}
     manifest_path = output_dir / "robustness_experiment_manifest.json"
     assert manifest_path.exists()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
     # 清单不含盘符绝对路径或 Windows 反斜杠逻辑路径
     def walk_strings(value: object) -> list[str]:
         found: list[str] = []

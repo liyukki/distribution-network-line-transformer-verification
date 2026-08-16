@@ -38,19 +38,13 @@ _BASELINE_WEIGHTS = ScoreWeights(
 def _residual_correlation_means(run_dir: Path) -> dict[str, float]:
     observed = pd.read_parquet(run_dir / "observed_measurements.parquet")
     truth = pd.read_csv(run_dir / "truth_topology.csv")
-    duplicated = observed.duplicated(
-        subset=["timestamp", "transformer_id"], keep=False
-    )
+    duplicated = observed.duplicated(subset=["timestamp", "transformer_id"], keep=False)
     if duplicated.any():
-        examples = observed.loc[
-            duplicated, ["timestamp", "transformer_id"]
-        ].head(3).to_dict("records")
-        raise DataContractError(
-            f"duplicate timestamp-transformer pairs: {examples}"
+        examples = (
+            observed.loc[duplicated, ["timestamp", "transformer_id"]].head(3).to_dict("records")
         )
-    wide = observed.pivot(
-        index="timestamp", columns="transformer_id", values="voltage_pu"
-    )
+        raise DataContractError(f"duplicate timestamp-transformer pairs: {examples}")
+    wide = observed.pivot(index="timestamp", columns="transformer_id", values="voltage_pu")
     residual = wide.sub(wide.median(axis=1), axis=0)
     physical = dict(zip(truth["transformer_id"], truth["physical_feeder_id"]))
     transformer_ids = list(truth["transformer_id"])
@@ -59,9 +53,7 @@ def _residual_correlation_means(run_dir: Path) -> dict[str, float]:
     for left in range(len(transformer_ids)):
         for right in range(left + 1, len(transformer_ids)):
             correlation = float(
-                residual[transformer_ids[left]].corr(
-                    residual[transformer_ids[right]]
-                )
+                residual[transformer_ids[left]].corr(residual[transformer_ids[right]])
             )
             if physical[transformer_ids[left]] == physical[transformer_ids[right]]:
                 same.append(correlation)
@@ -85,10 +77,7 @@ def _time_series_validation_summary(run_dir: Path) -> dict[str, object]:
         "transformer_overload",
     ):
         type_counts[violation_type] = int(
-            frame["violation_type"]
-            .fillna("")
-            .str.contains(violation_type, regex=False)
-            .sum()
+            frame["violation_type"].fillna("").str.contains(violation_type, regex=False).sum()
         )
     return {
         "timestamp_count": len(frame),
@@ -98,9 +87,7 @@ def _time_series_validation_summary(run_dir: Path) -> dict[str, object]:
         "maximum_transformer_loading_percent": float(
             frame["maximum_transformer_loading_percent"].max()
         ),
-        "maximum_power_balance_error_mw": float(
-            frame["absolute_power_balance_error_mw"].max()
-        ),
+        "maximum_power_balance_error_mw": float(frame["absolute_power_balance_error_mw"].max()),
         "severity_counts": frame["severity"].value_counts().to_dict(),
         "violation_type_counts": type_counts,
     }
@@ -119,9 +106,7 @@ def generate_default_summary(
     run_dir = Path(run_dir)
     output_path = Path(output_path)
     if manifest_output is None:
-        manifest_target = output_path.with_name(
-            f"{output_path.stem}.manifest.json"
-        )
+        manifest_target = output_path.with_name(f"{output_path.stem}.manifest.json")
     else:
         manifest_target = Path(manifest_output)
 
@@ -129,9 +114,7 @@ def generate_default_summary(
     if not manifest_path.exists():
         raise ValueError("缺少运行清单: manifest.json")
     manifest = read_json(manifest_path)
-    state, _ = classify_artifact_schema_version(
-        manifest.get("artifact_schema_version")
-    )
+    state, _ = classify_artifact_schema_version(manifest.get("artifact_schema_version"))
     if state != "current":
         raise ValueError(
             f"运行目录清单版本不受支持: "
@@ -147,21 +130,14 @@ def generate_default_summary(
     ]
     for name in forbidden_names:
         forbidden = (run_dir / str(name)).resolve()
-        if (
-            output_path.resolve() == forbidden
-            or manifest_target.resolve() == forbidden
-        ):
+        if output_path.resolve() == forbidden or manifest_target.resolve() == forbidden:
             raise ValueError(f"禁止覆盖源运行目录产物: {name}")
 
     artifacts = load_run_artifacts(run_dir)
     config = load_config(run_dir / "config.snapshot.yaml")
 
-    baseline_scored = score_candidates(
-        artifacts.candidate_features, _BASELINE_WEIGHTS
-    )
-    baseline_predictions = diagnose(
-        baseline_scored, artifacts.ledger, config.scoring
-    )
+    baseline_scored = score_candidates(artifacts.candidate_features, _BASELINE_WEIGHTS)
+    baseline_predictions = diagnose(baseline_scored, artifacts.ledger, config.scoring)
     baseline_result = evaluate_predictions(
         baseline_predictions,
         artifacts.truth,
@@ -204,10 +180,7 @@ def generate_default_summary(
                 "simulation_validation.csv",
             )
         },
-        "generated_by": (
-            "python -m ltverify report --run-dir <run_dir> --output "
-            "<output_path>"
-        ),
+        "generated_by": ("python -m ltverify report --run-dir <run_dir> --output <output_path>"),
     }
     write_json_atomic(summary, output_path)
     write_json_atomic(manifest, manifest_target)

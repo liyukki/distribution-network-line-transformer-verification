@@ -63,10 +63,7 @@ columns[1].metric("F1", _metric_text("f1"))
 columns[2].metric("Top-1 修正率", _metric_text("top1_correction_rate"))
 columns[3].metric("自动推荐覆盖率", _metric_text("automatic_coverage"))
 columns[4].metric("运行状态", str(artifacts.manifest.get("status", "unknown")))
-st.caption(
-    f"运行目录: {artifacts.run_dir.resolve()}；"
-    "清单 SHA-256 哈希一致性已校验（非数字签名）"
-)
+st.caption(f"运行目录: {artifacts.run_dir.resolve()}；清单 SHA-256 哈希一致性已校验（非数字签名）")
 
 pages = st.navigation(
     [

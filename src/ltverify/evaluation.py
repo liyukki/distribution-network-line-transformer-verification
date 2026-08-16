@@ -35,14 +35,10 @@ def evaluate_predictions(
     evidence_weight_threshold: float = 0.0,
 ) -> EvaluationResult:
     """Evaluate detection and feeder correction against the physical truth."""
-    merged = predictions.merge(
-        truth, on="transformer_id", how="left", validate="one_to_one"
-    )
+    merged = predictions.merge(truth, on="transformer_id", how="left", validate="one_to_one")
     if "reported_feeder_id" not in predictions.columns:
         reported = ledger[["transformer_id", "reported_feeder_id"]]
-        merged = merged.merge(
-            reported, on="transformer_id", how="left", validate="one_to_one"
-        )
+        merged = merged.merge(reported, on="transformer_id", how="left", validate="one_to_one")
     actual = merged["reported_feeder_id"] != merged["physical_feeder_id"]
     predicted = merged["predicted_is_mislinked"].astype(bool)
 
@@ -50,26 +46,20 @@ def evaluate_predictions(
         actual, predicted, average="binary", zero_division=0
     )
     if "anomaly_score" not in merged.columns:
-        raise ValueError(
-            "predictions must contain a continuous anomaly_score column"
-        )
+        raise ValueError("predictions must contain a continuous anomaly_score column")
     anomaly_score = merged["anomaly_score"].astype(float)
     n_actual_errors = int(actual.sum())
     n_actual_correct = int((~actual).sum())
     classes = sorted(set(actual.dropna().astype(bool).tolist()))
     if len(classes) == 2:
-        pr_auc = float(
-            average_precision_score(actual.astype(int), anomaly_score)
-        )
+        pr_auc = float(average_precision_score(actual.astype(int), anomaly_score))
         pr_auc_applicable = True
         pr_auc_unavailable_reason = None
     else:
         pr_auc = None
         pr_auc_applicable = False
         pr_auc_unavailable_reason = (
-            "single_class_all_positive"
-            if classes == [True]
-            else "single_class_all_negative"
+            "single_class_all_positive" if classes == [True] else "single_class_all_negative"
         )
     scored_mask = merged["decision"] != "insufficient_data"
     scored_classes = sorted(set(actual[scored_mask].dropna().astype(bool).tolist()))
@@ -85,14 +75,10 @@ def evaluate_predictions(
     else:
         pr_auc_scored = None
         pr_auc_scored_applicable = False
-        pr_auc_scored_unavailable_reason = (
-            "single_class" if scored_classes else "no_scored_samples"
-        )
+        pr_auc_scored_unavailable_reason = "single_class" if scored_classes else "no_scored_samples"
     matrix = confusion_matrix(actual, predicted, labels=[False, True])
 
-    candidate_feeders = sorted(
-        candidate_scores["candidate_feeder_id"].unique().tolist()
-    )
+    candidate_feeders = sorted(candidate_scores["candidate_feeder_id"].unique().tolist())
     candidate_count = len(candidate_feeders)
     topk: dict[str, float | int | None] = {}
     topk_applicable: dict[str, bool] = {}
@@ -109,16 +95,12 @@ def evaluate_predictions(
         evaluated = 0
         excluded_total = 0
         for transformer_id in error_rows["transformer_id"]:
-            rows = candidate_scores[
-                candidate_scores["transformer_id"] == transformer_id
-            ].copy()
-            finite_scores = pd.to_numeric(
-                rows["enhanced_score"], errors="coerce"
-            ).apply(lambda value: np.isfinite(value))
+            rows = candidate_scores[candidate_scores["transformer_id"] == transformer_id].copy()
+            finite_scores = pd.to_numeric(rows["enhanced_score"], errors="coerce").apply(
+                lambda value: np.isfinite(value)
+            )
             if "available_feature_weight" in rows.columns:
-                raw_weights = pd.to_numeric(
-                    rows["available_feature_weight"], errors="coerce"
-                )
+                raw_weights = pd.to_numeric(rows["available_feature_weight"], errors="coerce")
                 eligible_mask = (
                     finite_scores
                     & raw_weights.apply(lambda value: np.isfinite(value))
@@ -169,30 +151,20 @@ def evaluate_predictions(
         "n_actual_errors": n_actual_errors,
         "n_actual_correct": n_actual_correct,
         "n_predicted": int(predicted.sum()),
-        "automatic_coverage": float(
-            (merged["decision"] == "automatic_recommendation").mean()
-        ),
-        "insufficient_data_rate": float(
-            (merged["decision"] == "insufficient_data").mean()
-        ),
-        "scored_coverage": float(
-            (merged["decision"] != "insufficient_data").mean()
-        ),
+        "automatic_coverage": float((merged["decision"] == "automatic_recommendation").mean()),
+        "insufficient_data_rate": float((merged["decision"] == "insufficient_data").mean()),
+        "scored_coverage": float((merged["decision"] != "insufficient_data").mean()),
     }
     labeled = merged.copy()
     labeled["actual_is_mislinked"] = actual
     return EvaluationResult(
         metrics=metrics,
-        confusion_matrix=pd.DataFrame(
-            matrix, index=[False, True], columns=[False, True]
-        ),
+        confusion_matrix=pd.DataFrame(matrix, index=[False, True], columns=[False, True]),
         labeled_predictions=labeled,
     )
 
 
-def grouped_scenario_split(
-    metadata: pd.DataFrame, seed: int = 42
-) -> dict[str, set[str]]:
+def grouped_scenario_split(metadata: pd.DataFrame, seed: int = 42) -> dict[str, set[str]]:
     """Assign whole scenarios to train/validation/test (60/20/20)."""
     scenario_ids = sorted(metadata["scenario_id"].unique().tolist())
     rng = np.random.default_rng(seed)

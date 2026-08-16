@@ -119,8 +119,7 @@ def test_legal_feeder_without_ledger_members_stays_in_features() -> None:
     )
     assert "F02" in set(features["candidate_feeder_id"])
     f02_rows = features[
-        (features["transformer_id"] == "T001")
-        & (features["candidate_feeder_id"] == "F02")
+        (features["transformer_id"] == "T001") & (features["candidate_feeder_id"] == "F02")
     ]
     assert f02_rows["peer_count"].iloc[0] == 0
     assert pd.isna(f02_rows["raw_corr"].iloc[0])

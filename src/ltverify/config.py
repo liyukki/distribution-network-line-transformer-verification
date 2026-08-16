@@ -58,9 +58,7 @@ class ValidationConfig(BaseModel):
                 f"允许值: {list(ALLOWED_VIOLATION_TYPES)}"
             )
             if "non_convergence" in unknown:
-                message += (
-                    "；non_convergence 已改为无条件硬失败，请从列表中移除"
-                )
+                message += "；non_convergence 已改为无条件硬失败，请从列表中移除"
             raise ValueError(message)
         object.__setattr__(self, "critical_violation_types", deduplicated)
         return self

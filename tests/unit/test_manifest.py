@@ -89,9 +89,7 @@ def _manifest_with_input_paths(input_paths: object) -> dict[str, object]:
         [],
     ],
 )
-def test_verify_manifest_rejects_invalid_input_paths(
-    tmp_path: Path, input_paths: object
-) -> None:
+def test_verify_manifest_rejects_invalid_input_paths(tmp_path: Path, input_paths: object) -> None:
     manifest = _manifest_with_input_paths(input_paths)
     with pytest.raises(ValueError, match="input_paths"):
         verify_manifest_hashes(manifest, tmp_path)

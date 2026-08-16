@@ -71,9 +71,7 @@ def test_check_solved_network_records_physical_violations() -> None:
     # 关闭硬限值后同样违规降级为 warning 但仍被记录
     relaxed = check_solved_network(
         artifacts.net,
-        ValidationConfig(
-            critical_violation_types=("power_balance",)
-        ),
+        ValidationConfig(critical_violation_types=("power_balance",)),
     )
     assert relaxed.severity == "warning"
     assert "transformer_overload" in " | ".join(relaxed.violation_types)

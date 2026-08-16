@@ -71,12 +71,8 @@ def prepare_measurements(
     voltage_wide = voltage_wide.interpolate(
         method="time", limit=interpolation_limit, limit_area="inside"
     )
-    p_wide = p_wide.interpolate(
-        method="time", limit=interpolation_limit, limit_area="inside"
-    )
-    q_wide = q_wide.interpolate(
-        method="time", limit=interpolation_limit, limit_area="inside"
-    )
+    p_wide = p_wide.interpolate(method="time", limit=interpolation_limit, limit_area="inside")
+    q_wide = q_wide.interpolate(method="time", limit=interpolation_limit, limit_area="inside")
 
     common_mode = voltage_wide.median(axis=1)
     residual_voltage_wide = voltage_wide.sub(common_mode, axis=0)

@@ -62,9 +62,7 @@ def simulate_time_series(
     for step, timestamp in enumerate(profiles.index):
         net.load.loc[load_indices, "p_mw"] = profiles.load_p_mw.iloc[step].to_numpy()
         net.load.loc[load_indices, "q_mvar"] = profiles.load_q_mvar.iloc[step].to_numpy()
-        net.sgen.loc[pv_indices, "p_mw"] = (
-            profiles.pv_p_mw.iloc[step][pv_columns].to_numpy()
-        )
+        net.sgen.loc[pv_indices, "p_mw"] = profiles.pv_p_mw.iloc[step][pv_columns].to_numpy()
         init_mode = "auto" if step == 0 or last_step_failed else "results"
         try:
             pp.runpp(net, calculate_voltage_angles=False, init=init_mode)
@@ -99,12 +97,8 @@ def simulate_time_series(
                 "converged": check.converged,
                 "voltage_min_pu": check.voltage_min_pu,
                 "voltage_max_pu": check.voltage_max_pu,
-                "maximum_transformer_loading_percent": (
-                    check.maximum_transformer_loading_percent
-                ),
-                "absolute_power_balance_error_mw": (
-                    check.absolute_power_balance_error_mw
-                ),
+                "maximum_transformer_loading_percent": (check.maximum_transformer_loading_percent),
+                "absolute_power_balance_error_mw": (check.absolute_power_balance_error_mw),
                 "violation_type": "|".join(check.violation_types),
                 "message": " | ".join(check.messages),
                 "severity": check.severity,
@@ -112,9 +106,7 @@ def simulate_time_series(
         )
         last_step_failed = False
 
-        for transformer_id, lv_bus, trafo_index in zip(
-            transformer_ids, lv_buses, trafo_indices
-        ):
+        for transformer_id, lv_bus, trafo_index in zip(transformer_ids, lv_buses, trafo_indices):
             transformer_rows.append(
                 {
                     "timestamp": timestamp,

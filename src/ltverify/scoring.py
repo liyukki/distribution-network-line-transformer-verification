@@ -86,9 +86,7 @@ def score_candidates(features: pd.DataFrame, weights: ScoreWeights) -> pd.DataFr
     return scored
 
 
-def diagnose(
-    scored: pd.DataFrame, ledger: pd.DataFrame, cfg: ScoringConfig
-) -> pd.DataFrame:
+def diagnose(scored: pd.DataFrame, ledger: pd.DataFrame, cfg: ScoringConfig) -> pd.DataFrame:
     """Decide per transformer whether the reported feeder is wrong.
 
     Every key evidence value (coverage, current score, best score, margin,
@@ -103,14 +101,10 @@ def diagnose(
         ].iloc[0]
         current_rows = group[group["candidate_feeder_id"] == reported]
         current_score = (
-            float(current_rows["enhanced_score"].iloc[0])
-            if len(current_rows)
-            else float("nan")
+            float(current_rows["enhanced_score"].iloc[0]) if len(current_rows) else float("nan")
         )
         if "available_feature_weight" in scored.columns and len(current_rows):
-            current_weight = float(
-                current_rows["available_feature_weight"].iloc[0]
-            )
+            current_weight = float(current_rows["available_feature_weight"].iloc[0])
         else:
             current_weight = 1.0
         others = group[group["candidate_feeder_id"] != reported]
@@ -120,8 +114,7 @@ def diagnose(
         valid_others = others.dropna(subset=["enhanced_score"])
         if "available_feature_weight" in scored.columns:
             valid_others = valid_others[
-                valid_others["available_feature_weight"]
-                >= cfg.evidence_weight_threshold
+                valid_others["available_feature_weight"] >= cfg.evidence_weight_threshold
             ]
         if len(valid_others):
             best_index = valid_others["enhanced_score"].idxmax()
@@ -148,17 +141,13 @@ def diagnose(
         confidence = 0.0
         if not evidence_complete:
             decision = "insufficient_data"
-        elif (
-            current_score < cfg.current_score_threshold
-            and margin > cfg.margin_threshold
-        ):
+        elif current_score < cfg.current_score_threshold and margin > cfg.margin_threshold:
             decision = "automatic_recommendation"
             predicted = True
             recommended = best_candidate
             confidence = coverage * float(
                 np.clip(
-                    (margin - cfg.margin_threshold)
-                    / (1.0 - cfg.margin_threshold),
+                    (margin - cfg.margin_threshold) / (1.0 - cfg.margin_threshold),
                     0.0,
                     1.0,
                 )
@@ -181,9 +170,7 @@ def diagnose(
     frame = pd.DataFrame(rows, columns=PREDICTION_COLUMNS)
     frame["anomaly_score"] = 0.0
     scored_mask = frame["decision"] != "insufficient_data"
-    frame.loc[scored_mask, "anomaly_score"] = frame.loc[
-        scored_mask, "coverage"
-    ] * np.minimum(
+    frame.loc[scored_mask, "anomaly_score"] = frame.loc[scored_mask, "coverage"] * np.minimum(
         1.0 - frame.loc[scored_mask, "current_score"],
         np.maximum(frame.loc[scored_mask, "margin"], 0.0),
     )

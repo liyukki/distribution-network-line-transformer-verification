@@ -11,9 +11,7 @@ if artifacts is None:
 
 mode = st.selectbox("矩阵类型", ["原始电压", "去公共趋势残差", "一阶差分"])
 observed = artifacts.observed_measurements
-voltage = observed.pivot(
-    index="timestamp", columns="transformer_id", values="voltage_pu"
-)
+voltage = observed.pivot(index="timestamp", columns="transformer_id", values="voltage_pu")
 if mode == "原始电压":
     matrix = voltage
 elif mode == "去公共趋势残差":
@@ -21,7 +19,5 @@ elif mode == "去公共趋势残差":
 else:
     matrix = voltage.diff()
 correlation = matrix.corr()
-st.plotly_chart(
-    similarity_heatmap_figure(correlation), width='stretch'
-)
+st.plotly_chart(similarity_heatmap_figure(correlation), width="stretch")
 st.caption("矩阵按所选模式在共同有效时间点上计算 Pearson 相关系数。")

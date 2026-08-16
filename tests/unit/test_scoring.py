@@ -12,9 +12,15 @@ def scored_candidate_fixture() -> tuple[pd.DataFrame, pd.DataFrame]:
     scored = pd.DataFrame(
         {
             "transformer_id": [
-                "T001", "T001", "T001",
-                "T002", "T002", "T002",
-                "T003", "T003", "T003",
+                "T001",
+                "T001",
+                "T001",
+                "T002",
+                "T002",
+                "T002",
+                "T003",
+                "T003",
+                "T003",
             ],
             "candidate_feeder_id": ["F01", "F02", "F03"] * 3,
             "peer_count": [2] * 9,
@@ -148,9 +154,7 @@ def test_insufficient_evidence_weight_blocks_recommendation() -> None:
     scored, ledger = scored_candidate_fixture()
     scored["available_feature_weight"] = 1.0
     scored.loc[scored["transformer_id"] == "T001", "available_feature_weight"] = 0.1
-    predictions = diagnose(
-        scored, ledger, ScoringConfig(evidence_weight_threshold=0.5)
-    )
+    predictions = diagnose(scored, ledger, ScoringConfig(evidence_weight_threshold=0.5))
     row = predictions.set_index("transformer_id").loc["T001"]
     assert row["decision"] == "insufficient_data"
     assert bool(row["predicted_is_mislinked"]) is False
