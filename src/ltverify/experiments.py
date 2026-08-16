@@ -66,15 +66,25 @@ _METRIC_COLUMNS = (
     "precision",
     "recall",
     "f1",
+    "pr_auc",
+    "pr_auc_scored",
     "top1_correction_rate",
     "top2_correction_rate",
     "automatic_coverage",
+    "scored_coverage",
+    "insufficient_data_rate",
+    "n_actual_errors",
     "runtime_seconds",
 )
 
 _PHYSICAL_COLUMNS = (
     "convergence_rate",
     "violation_count",
+    "maximum_power_balance_error_mw",
+    "non_convergence_count",
+    "power_balance_count",
+    "voltage_out_of_bounds_count",
+    "transformer_overload_count",
     "voltage_min_pu",
     "voltage_max_pu",
     "maximum_transformer_loading_percent",
@@ -212,13 +222,43 @@ def _run_case(
     )
     scored = score_candidates(features, _weights_for(case.enabled_features))
     predictions = diagnose(scored, ledger, config.scoring)
-    result = evaluate_predictions(predictions, truth, ledger, scored)
+    result = evaluate_predictions(
+        predictions,
+        truth,
+        ledger,
+        scored,
+        evidence_weight_threshold=config.scoring.evidence_weight_threshold,
+    )
 
     validation = simulation.validation
+    type_counts: dict[str, int] = {}
     if len(validation):
+        for violation_type in (
+            "non_convergence",
+            "power_balance",
+            "voltage_out_of_bounds",
+            "transformer_overload",
+        ):
+            type_counts[violation_type] = int(
+                validation["violation_type"]
+                .fillna("")
+                .str.contains(violation_type, regex=False)
+                .sum()
+            )
         physical = {
             "convergence_rate": float(validation["converged"].mean()),
             "violation_count": int((validation["severity"] != "ok").sum()),
+            "maximum_power_balance_error_mw": float(
+                validation["absolute_power_balance_error_mw"].max()
+            ),
+            "non_convergence_count": type_counts["non_convergence"],
+            "power_balance_count": type_counts["power_balance"],
+            "voltage_out_of_bounds_count": type_counts[
+                "voltage_out_of_bounds"
+            ],
+            "transformer_overload_count": type_counts[
+                "transformer_overload"
+            ],
             "voltage_min_pu": float(validation["voltage_min_pu"].min()),
             "voltage_max_pu": float(validation["voltage_max_pu"].max()),
             "maximum_transformer_loading_percent": float(
@@ -229,6 +269,11 @@ def _run_case(
         physical = {
             "convergence_rate": float("nan"),
             "violation_count": 0,
+            "maximum_power_balance_error_mw": float("nan"),
+            "non_convergence_count": 0,
+            "power_balance_count": 0,
+            "voltage_out_of_bounds_count": 0,
+            "transformer_overload_count": 0,
             "voltage_min_pu": float("nan"),
             "voltage_max_pu": float("nan"),
             "maximum_transformer_loading_percent": float("nan"),
