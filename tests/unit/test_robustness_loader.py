@@ -223,6 +223,48 @@ def test_load_rejects_missing_or_blank_family_value(
         load_robustness_artifacts(aggregate_path)
 
 
+@pytest.mark.parametrize("status", [None, "", "   "])
+def test_load_rejects_missing_or_blank_summary_status(
+    tmp_path: Path, status: object
+) -> None:
+    aggregate_path = tmp_path / "experiment_aggregates.csv"
+    summary_path = tmp_path / "experiment_summary.csv"
+    pd.DataFrame(
+        {
+            "family": ["missing_rate"],
+            "value": ["0.1"],
+            "mean_precision": [0.8],
+            "std_precision": [0.06],
+        }
+    ).to_csv(aggregate_path, index=False)
+    pd.DataFrame(
+        {"case_id": ["a"], "status": [status]}
+    ).to_csv(summary_path, index=False)
+    with pytest.raises(RobustnessLoadError, match="status"):
+        load_robustness_artifacts(aggregate_path, summary_path)
+
+
+def test_load_normalizes_legacy_summary_status_whitespace(
+    tmp_path: Path,
+) -> None:
+    aggregate_path = tmp_path / "experiment_aggregates.csv"
+    summary_path = tmp_path / "experiment_summary.csv"
+    pd.DataFrame(
+        {
+            "family": ["missing_rate"],
+            "value": ["0.1"],
+            "mean_precision": [0.8],
+            "std_precision": [0.06],
+        }
+    ).to_csv(aggregate_path, index=False)
+    pd.DataFrame(
+        {"case_id": ["a"], "status": [" completed "]}
+    ).to_csv(summary_path, index=False)
+    result = load_robustness_artifacts(aggregate_path, summary_path)
+    assert result.summary is not None
+    assert result.summary["status"].tolist() == ["completed"]
+
+
 @pytest.mark.parametrize(
     ("column", "value"),
     [

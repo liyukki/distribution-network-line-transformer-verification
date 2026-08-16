@@ -666,7 +666,7 @@ def test_robustness_page_legacy_shows_unverified_warning(
     raised = [element.value for element in app_test.exception]
     assert len(app_test.exception) == 0, raised
     warnings = [element.value for element in app_test.warning]
-    assert any("未经验签" in text for text in warnings)
+    assert any("未经过哈希一致性校验" in text for text in warnings)
 
 
 def test_schema_three_state_branches(run_dir: Path) -> None:

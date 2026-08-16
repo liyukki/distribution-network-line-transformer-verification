@@ -2,7 +2,11 @@ from pathlib import Path
 
 from ltverify.experiments import (
     ABLATION_FEATURES,
+    CURRENT_AGGREGATES_NAME,
+    CURRENT_MANIFEST_NAME,
+    CURRENT_SUMMARY_NAME,
     FAMILY_CONFIG_PATHS,
+    REQUIRED_EXPERIMENT_OUTPUTS,
     expand_experiment_grid,
 )
 
@@ -47,6 +51,16 @@ def test_family_paths_cover_all_experiment_families() -> None:
         "time_shift_steps",
         "pv_scale",
     }
+
+
+def test_authoritative_current_names_are_single_source() -> None:
+    assert REQUIRED_EXPERIMENT_OUTPUTS == {
+        CURRENT_SUMMARY_NAME,
+        CURRENT_AGGREGATES_NAME,
+    }
+    assert CURRENT_MANIFEST_NAME == "robustness_experiment_manifest.json"
+    assert CURRENT_AGGREGATES_NAME == "robustness_aggregates.csv"
+    assert CURRENT_SUMMARY_NAME == "robustness_summary.csv"
 
 
 def test_case_with_simulation_failure_is_not_completed(
