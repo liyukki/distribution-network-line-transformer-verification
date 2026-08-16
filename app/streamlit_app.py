@@ -34,7 +34,6 @@ if not run_dir:
     st.stop()
 
 
-@st.cache_data(show_spinner=False)
 def _load_run(directory: str) -> RunArtifacts:
     return load_run_artifacts(Path(directory))
 
