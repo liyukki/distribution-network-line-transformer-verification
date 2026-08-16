@@ -2,6 +2,7 @@
 
 import json
 from dataclasses import dataclass
+from numbers import Integral, Real
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,7 @@ from ltverify.features import FEATURE_COLUMNS
 from ltverify.io import read_json
 from ltverify.manifest import (
     classify_artifact_schema_version,
+    validate_output_declarations,
     verify_manifest_hashes,
 )
 from ltverify.scoring import PREDICTION_COLUMNS
@@ -68,9 +70,7 @@ _REPAIR_HINT = "请运行 python -m ltverify run-all --config configs/default.ya
 
 def _require_regular_file(path: Path, label: str) -> None:
     if not path.is_file():
-        raise ArtifactLoadError(
-            f"{label}不是普通文件: {path.resolve()}；{_REPAIR_HINT}"
-        )
+        raise ArtifactLoadError(f"{label}不是普通文件: {path.resolve()}；{_REPAIR_HINT}")
 
 
 def _read_frame(run_dir: Path, name: str) -> pd.DataFrame:
@@ -83,10 +83,14 @@ def _read_frame(run_dir: Path, name: str) -> pd.DataFrame:
                 frame = frame.set_index("index")
             return frame
         return pd.read_parquet(path)
-    except (OSError, UnicodeError, ValueError, pd.errors.ParserError, pd.errors.EmptyDataError) as exc:
-        raise ArtifactLoadError(
-            f"无法解析产物 {name}: {exc}"
-        ) from exc
+    except (
+        OSError,
+        UnicodeError,
+        ValueError,
+        pd.errors.ParserError,
+        pd.errors.EmptyDataError,
+    ) as exc:
+        raise ArtifactLoadError(f"无法解析产物 {name}: {exc}") from exc
     except Exception as exc:
         if type(exc).__name__ in {
             "ArrowException",
@@ -94,9 +98,7 @@ def _read_frame(run_dir: Path, name: str) -> pd.DataFrame:
             "ArrowIOError",
             "ParquetError",
         }:
-            raise ArtifactLoadError(
-                f"无法解析产物 {name}: {exc}"
-            ) from exc
+            raise ArtifactLoadError(f"无法解析产物 {name}: {exc}") from exc
         raise
 
 
@@ -106,28 +108,58 @@ def _read_metrics(run_dir: Path) -> dict[str, Any]:
     try:
         metrics = read_json(path)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ArtifactLoadError(
-            f"无法解析 metrics.json: {exc}"
-        ) from exc
+        raise ArtifactLoadError(f"无法解析 metrics.json: {exc}") from exc
     if not isinstance(metrics, dict):
         raise ArtifactLoadError("metrics.json 顶层必须是 JSON object")
     return metrics
 
 
+def _require_ratio_metric(
+    metrics: dict[str, object],
+    key: str,
+    *,
+    allow_none: bool,
+) -> float | None:
+    value = metrics.get(key)
+    if value is None and allow_none:
+        return None
+    if isinstance(value, bool) or not isinstance(value, Real):
+        raise ArtifactLoadError(f"metrics.{key} 必须是 [0,1] 内有限数值")
+    numeric = float(value)
+    if not np.isfinite(numeric) or not 0.0 <= numeric <= 1.0:
+        raise ArtifactLoadError(f"metrics.{key} 必须是 [0,1] 内有限数值")
+    return numeric
+
+
+def _require_count_metric(
+    metrics: dict[str, object],
+    key: str,
+    *,
+    positive: bool,
+) -> int:
+    value = metrics.get(key)
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ArtifactLoadError(f"metrics.{key} 必须是整数")
+    numeric = int(value)
+    if positive and numeric <= 0:
+        raise ArtifactLoadError(f"metrics.{key} 必须是正整数")
+    if not positive and numeric < 0:
+        raise ArtifactLoadError(f"metrics.{key} 必须是非负整数")
+    return numeric
+
+
 def _validate_metrics(metrics: dict[str, object]) -> None:
-    n_predicted = metrics.get("n_predicted")
-    if isinstance(n_predicted, bool) or not isinstance(n_predicted, int) or n_predicted < 0:
-        raise ArtifactLoadError("metrics.n_predicted 必须是非负整数")
-    for key in ("f1", "top1_correction_rate", "automatic_coverage"):
-        value = metrics.get(key)
-        if value is None:
-            continue
-        try:
-            numeric = float(value)
-        except (TypeError, ValueError) as exc:
-            raise ArtifactLoadError(f"metrics.{key} 必须是有限数值") from exc
-        if not np.isfinite(numeric):
-            raise ArtifactLoadError(f"metrics.{key} 必须是有限数值")
+    n_total = _require_count_metric(metrics, "n_total", positive=True)
+    n_predicted = _require_count_metric(metrics, "n_predicted", positive=False)
+    if n_predicted > n_total:
+        raise ArtifactLoadError("metrics.n_predicted 不能大于 n_total")
+    _require_ratio_metric(metrics, "f1", allow_none=False)
+    _require_ratio_metric(metrics, "automatic_coverage", allow_none=False)
+    _require_ratio_metric(metrics, "top1_correction_rate", allow_none=True)
+    if "n_actual_errors" in metrics:
+        n_errors = _require_count_metric(metrics, "n_actual_errors", positive=False)
+        if n_errors > n_total:
+            raise ArtifactLoadError("metrics.n_actual_errors 不能大于 n_total")
 
 
 def _validate_dashboard_contracts(
@@ -177,9 +209,7 @@ def _validate_dashboard_contracts(
     try:
         matrix = confusion_matrix.to_numpy(dtype=float)
     except (TypeError, ValueError) as exc:
-        raise ArtifactLoadError(
-            "confusion_matrix.csv 必须是 2×2 数值矩阵"
-        ) from exc
+        raise ArtifactLoadError("confusion_matrix.csv 必须是 2×2 数值矩阵") from exc
     if matrix.shape != (2, 2) or not np.isfinite(matrix).all():
         raise ArtifactLoadError("confusion_matrix.csv 必须是 2×2 数值矩阵")
 
@@ -206,18 +236,14 @@ def discover_completed_run_dir(runs_root: Path = Path("runs")) -> str:
             continue
         if not isinstance(manifest, dict):
             continue
-        state, _ = classify_artifact_schema_version(
-            manifest.get("artifact_schema_version")
-        )
+        state, _ = classify_artifact_schema_version(manifest.get("artifact_schema_version"))
         if state != "current":
             continue
         if manifest.get("status") != "completed":
             continue
-        output_paths = manifest.get("output_paths")
-        output_sha256 = manifest.get("output_sha256")
-        if not isinstance(output_paths, list) or not isinstance(output_sha256, dict):
-            continue
-        if set(output_paths) != set(output_sha256.keys()):
+        try:
+            output_paths, _ = validate_output_declarations(manifest)
+        except (ValueError, TypeError):
             continue
         if not REQUIRED_DASHBOARD_ARTIFACTS.issubset(set(output_paths)):
             continue
@@ -250,42 +276,29 @@ def load_run_artifacts(run_dir: Path) -> RunArtifacts:
     try:
         manifest = read_json(manifest_path)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ArtifactLoadError(
-            f"无法解析运行清单 manifest.json: {exc}"
-        ) from exc
+        raise ArtifactLoadError(f"无法解析运行清单 manifest.json: {exc}") from exc
     if not isinstance(manifest, dict):
         raise ArtifactLoadError("运行清单 manifest.json 顶层必须是 JSON object")
 
-    state, _ = classify_artifact_schema_version(
-        manifest.get("artifact_schema_version")
-    )
+    state, _ = classify_artifact_schema_version(manifest.get("artifact_schema_version"))
     if state != "current":
-        raise ArtifactLoadError(
-            "运行清单 schema 不受支持，仅接受当前 schema-v2 运行"
-        )
+        raise ArtifactLoadError("运行清单 schema 不受支持，仅接受当前 schema-v2 运行")
     if manifest.get("status") != "completed":
-        raise ArtifactLoadError(
-            f"运行状态不是 completed: {manifest.get('status')!r}"
-        )
+        raise ArtifactLoadError(f"运行状态不是 completed: {manifest.get('status')!r}")
 
-    output_paths = manifest.get("output_paths")
-    output_sha256 = manifest.get("output_sha256")
-    if not isinstance(output_paths, list) or not isinstance(output_sha256, dict):
-        raise ArtifactLoadError("运行清单 output_paths/output_sha256 结构非法")
+    try:
+        output_paths, _ = validate_output_declarations(manifest)
+    except (ValueError, TypeError) as exc:
+        raise ArtifactLoadError(f"运行清单 output_paths/output_sha256 非法: {exc}") from exc
     declared = set(output_paths)
     missing_declared = sorted(REQUIRED_DASHBOARD_ARTIFACTS - declared)
     if missing_declared:
-        raise ArtifactLoadError(
-            "运行清单未声明首页必需产物: "
-            + ", ".join(missing_declared)
-        )
+        raise ArtifactLoadError("运行清单未声明首页必需产物: " + ", ".join(missing_declared))
 
     try:
         verify_manifest_hashes(manifest, run_dir)
     except (ValueError, TypeError, OSError, UnicodeError) as exc:
-        raise ArtifactLoadError(
-            f"运行清单哈希一致性校验失败: {exc}；{_REPAIR_HINT}"
-        ) from exc
+        raise ArtifactLoadError(f"运行清单哈希一致性校验失败: {exc}；{_REPAIR_HINT}") from exc
 
     def read(name: str) -> pd.DataFrame:
         return _read_frame(run_dir, name)

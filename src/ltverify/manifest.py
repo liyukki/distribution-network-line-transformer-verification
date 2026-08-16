@@ -85,6 +85,48 @@ def classify_artifact_schema_version(
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
+
+def validate_output_declarations(
+    manifest: dict[str, object],
+) -> tuple[tuple[str, ...], dict[str, str]]:
+    """Validate output_paths/output_sha256 without touching the filesystem.
+
+    Element types are checked before any set/collection operation so that
+    malformed JSON arrays containing lists/dicts cannot leak unhashable
+    ``TypeError`` into dashboard loaders.
+    """
+    output_paths = manifest.get("output_paths")
+    output_sha256 = manifest.get("output_sha256")
+    if not isinstance(output_paths, list):
+        raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
+            "output_paths 必须是 list[str]"
+        )
+    paths: list[str] = []
+    for index, name in enumerate(output_paths):
+        if not isinstance(name, str) or not name:
+            raise ValueError(f"output_paths[{index}] 必须是非空字符串")
+        validate_portable_relative_path(name, field="output_paths")
+        if name in paths:
+            raise ValueError(f"output_paths 存在重复项: {name}")
+        paths.append(name)
+    if not isinstance(output_sha256, dict):
+        raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
+            "output_sha256 必须是 dict[str, str]"
+        )
+    hashes: dict[str, str] = {}
+    for key, value in output_sha256.items():
+        if not isinstance(key, str) or not key:
+            raise ValueError("output_sha256 键必须是非空字符串")
+        validate_portable_relative_path(key, field="output_sha256")
+        if not isinstance(value, str) or not _SHA256_PATTERN.match(value):
+            raise ValueError(f"output_sha256['{key}'] 必须是 64 位十六进制字符串")
+        hashes[key] = value
+    if set(paths) != set(hashes.keys()):
+        difference = sorted(set(paths) ^ set(hashes.keys()))
+        raise ValueError(f"output_paths 与 output_sha256 必须一一对应，差异条目: {difference}")
+    return tuple(paths), hashes
+
+
 _WINDOWS_RESERVED_NAMES = frozenset(
     {
         "CON",
@@ -112,31 +154,21 @@ def validate_portable_relative_path(value: object, *, field: str) -> str:
         raise ValueError(f"{field} 路径必须是非空字符串")
     text = value
     if re.match(r"^[A-Za-z]:", text):
-        raise ValueError(
-            f"{field} 路径禁止盘符前缀/绝对路径: {text!r}"
-        )
+        raise ValueError(f"{field} 路径禁止盘符前缀/绝对路径: {text!r}")
     if "\\" in text:
         raise ValueError(f"{field} 路径禁止反斜杠/绝对路径: {text!r}")
     if PurePosixPath(text).is_absolute():
         raise ValueError(f"{field} 路径禁止绝对路径: {text!r}")
     for part in text.split("/"):
         if part in ("", ".", ".."):
-            raise ValueError(
-                f"{field} 路径禁止空段、点段或路径穿越: {text!r}"
-            )
+            raise ValueError(f"{field} 路径禁止空段、点段或路径穿越: {text!r}")
         if any(ord(char) < 32 or char in _FORBIDDEN_FILENAME_CHARS for char in part):
-            raise ValueError(
-                f"{field} 路径包含非法字符: {text!r}"
-            )
+            raise ValueError(f"{field} 路径包含非法字符: {text!r}")
         if part != part.rstrip(" ."):
-            raise ValueError(
-                f"{field} 路径禁止尾随点或空格: {text!r}"
-            )
+            raise ValueError(f"{field} 路径禁止尾随点或空格: {text!r}")
         stem = part.split(".", 1)[0].upper()
         if stem in _WINDOWS_RESERVED_NAMES:
-            raise ValueError(
-                f"{field} 路径包含 Windows 保留设备名: {text!r}"
-            )
+            raise ValueError(f"{field} 路径包含 Windows 保留设备名: {text!r}")
     return text
 
 
@@ -168,71 +200,30 @@ def verify_manifest_hashes(manifest: dict[str, object], run_dir: Path) -> None:
     if len(input_paths) != len(set(input_paths)):
         raise ValueError("input_paths 存在重复项")
 
-    paths = manifest.get("output_paths")
-    hashes = manifest.get("output_sha256")
-    if not isinstance(paths, list):
-        raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
-            "output_paths 必须是 list[str]"
-        )
-    if not isinstance(hashes, dict):
-        raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
-            "output_sha256 必须是 dict[str, str]"
-        )
-    for index, name in enumerate(paths):
-        if not isinstance(name, str):
-            raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
-                f"output_paths[{index}] 必须是字符串"
-            )
-        validate_portable_relative_path(name, field="output_paths")
-    if len(paths) != len(set(paths)):
-        raise ValueError(f"output_paths 存在重复条目: {paths}")
-    for key, value in hashes.items():
-        if not isinstance(key, str):
-            raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
-                "output_sha256 的键必须是字符串"
-            )
-        if not isinstance(value, str):
-            raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
-                f"output_sha256['{key}'] 必须是字符串"
-            )
-    if set(paths) != set(hashes.keys()):
-        difference = sorted(set(paths) ^ set(hashes.keys()))
-        raise ValueError(
-            f"output_paths 与 output_sha256 必须一一对应，差异条目: {difference}"
-        )
+    paths, hashes = validate_output_declarations(manifest)
     for name in paths:
         text = validate_portable_relative_path(name, field="output_paths")
         expected = hashes[name]
         if not _SHA256_PATTERN.match(expected):
-            raise ValueError(
-                f"output_sha256['{text}'] 必须是 64 位十六进制字符串"
-            )
+            raise ValueError(f"output_sha256['{text}'] 必须是 64 位十六进制字符串")
         path = Path(run_dir) / text
         if not path.is_file():
             raise ValueError(f"清单产物不是普通文件: {text}")
         try:
             actual = file_sha256(path)
         except OSError as exc:
-            raise ValueError(
-                f"读取清单产物哈希失败: {text}"
-            ) from exc
+            raise ValueError(f"读取清单产物哈希失败: {text}") from exc
         if actual != expected:
-            raise ValueError(
-                f"产物校验失败: {text}（期望 {expected}，实际 {actual}）"
-            )
+            raise ValueError(f"产物校验失败: {text}（期望 {expected}，实际 {actual}）")
     if "config.snapshot.yaml" not in hashes:
         raise ValueError(
             "schema-v2 清单必须包含 config.snapshot.yaml 哈希（旧清单请重新运行流水线）"
         )
     config_sha_value = manifest.get("config_sha256")
-    if not isinstance(config_sha_value, str) or not _SHA256_PATTERN.match(
-        config_sha_value
-    ):
+    if not isinstance(config_sha_value, str) or not _SHA256_PATTERN.match(config_sha_value):
         raise ValueError("manifest.config_sha256 不是 64 位十六进制哈希")
     if hashes["config.snapshot.yaml"] != config_sha_value:
-        raise ValueError(
-            "config.snapshot.yaml 哈希与 manifest.config_sha256 不一致"
-        )
+        raise ValueError("config.snapshot.yaml 哈希与 manifest.config_sha256 不一致")
 
 
 def build_manifest(config_path: Path, run_dir: Path) -> RunManifest:
