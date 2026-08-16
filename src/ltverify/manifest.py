@@ -18,6 +18,7 @@ _PACKAGES = ("pandapower", "pandas", "numpy", "pydantic", "scikit-learn", "pyarr
 
 class RunManifest(BaseModel):
     run_id: str
+    artifact_schema_version: int = 2
     started_at_utc: datetime
     finished_at_utc: datetime | None = None
     status: Literal["running", "completed", "failed"] = "running"
@@ -28,6 +29,7 @@ class RunManifest(BaseModel):
     random_seed: int
     input_paths: list[str]
     output_paths: list[str]
+    output_sha256: dict[str, str] = {}
     failure_summary: dict[str, str] | None = None
 
 
@@ -54,6 +56,24 @@ def package_versions() -> dict[str, str]:
     return resolved
 
 
+def file_sha256(path: Path) -> str:
+    """SHA-256 of one file, used for artifact integrity checks."""
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def verify_manifest_hashes(manifest: dict[str, object], run_dir: Path) -> None:
+    """Raise on any artifact whose bytes no longer match the manifest."""
+    for name, expected in manifest.get("output_sha256", {}).items():
+        path = Path(run_dir) / str(name)
+        if not path.exists():
+            raise ValueError(f"缺少清单产物: {path}")
+        actual = file_sha256(path)
+        if actual != expected:
+            raise ValueError(
+                f"产物校验失败: {name}（期望 {expected}，实际 {actual}）"
+            )
+
+
 def build_manifest(config_path: Path, run_dir: Path) -> RunManifest:
     """Capture the environment and inputs of a run."""
     config = load_config(config_path)
@@ -61,6 +81,7 @@ def build_manifest(config_path: Path, run_dir: Path) -> RunManifest:
     run_id = now.strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:6]
     return RunManifest(
         run_id=run_id,
+        artifact_schema_version=2,
         started_at_utc=now,
         config_sha256=hashlib.sha256(config_path.read_bytes()).hexdigest(),
         git_commit=git_commit(),
@@ -69,4 +90,5 @@ def build_manifest(config_path: Path, run_dir: Path) -> RunManifest:
         random_seed=config.random_seed,
         input_paths=[str(config_path)],
         output_paths=[],
+        output_sha256={},
     )

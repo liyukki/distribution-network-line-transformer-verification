@@ -10,7 +10,7 @@ from ltverify.corruption import build_truth, corrupt_ledger, disturb_measurement
 from ltverify.evaluation import evaluate_predictions
 from ltverify.features import build_candidate_features
 from ltverify.io import write_json_atomic, write_table_atomic
-from ltverify.manifest import RunManifest, build_manifest
+from ltverify.manifest import RunManifest, build_manifest, file_sha256
 from ltverify.network import build_network, topology_frames
 from ltverify.preprocessing import prepare_measurements
 from ltverify.profiles import generate_profiles
@@ -29,7 +29,10 @@ def _run_directory(config_sha256: str) -> Path:
 def _write_manifest(
     manifest: RunManifest, run_dir: Path, output_paths: list[Path]
 ) -> None:
-    manifest.output_paths = [str(path) for path in output_paths]
+    manifest.output_paths = [path.name for path in output_paths]
+    manifest.output_sha256 = {
+        path.name: file_sha256(path) for path in output_paths if path.exists()
+    }
     write_json_atomic(
         manifest.model_dump(mode="json"), run_dir / "manifest.json"
     )
@@ -109,7 +112,13 @@ def run_pipeline(config_path: Path) -> Path:
         )
         scored = score_candidates(features, ScoreWeights())
         predictions = diagnose(scored, ledger, config.scoring)
-        result = evaluate_predictions(predictions, truth, ledger, scored)
+        result = evaluate_predictions(
+            predictions,
+            truth,
+            ledger,
+            scored,
+            evidence_weight_threshold=config.scoring.evidence_weight_threshold,
+        )
 
         nodes, edges = topology_frames(artifacts)
         metrics = dict(result.metrics)
