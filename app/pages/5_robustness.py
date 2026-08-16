@@ -48,9 +48,9 @@ try:
 except ValueError as exc:
     st.error(str(exc))
     st.stop()
-st.plotly_chart(figure, use_container_width=True)
+st.plotly_chart(figure, width='stretch')
 with st.expander("聚合汇总"):
-    st.dataframe(aggregates, use_container_width=True)
+    st.dataframe(aggregates, width='stretch')
 
 summary_path = st.text_input(
     "案例明细 CSV 路径（experiment_summary.csv，仅用于明细与失败原因）",
@@ -59,7 +59,7 @@ summary_path = st.text_input(
 if summary_path and Path(summary_path).exists():
     summary = pd.read_csv(summary_path)
     with st.expander("案例明细与失败原因"):
-        st.dataframe(summary, use_container_width=True)
+        st.dataframe(summary, width='stretch')
         failed = summary[summary["status"] != "completed"]
         if len(failed):
             st.warning(f"存在 {len(failed)} 个失败案例，详见明细表。")

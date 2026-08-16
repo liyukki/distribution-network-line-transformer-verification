@@ -30,7 +30,7 @@ voltage_wide = device.pivot(
 )
 st.plotly_chart(
     voltage_curves_figure(voltage_wide, [transformer_id]),
-    use_container_width=True,
+    width='stretch',
 )
 
 scores = artifacts.candidate_features[
@@ -38,7 +38,7 @@ scores = artifacts.candidate_features[
 ]
 st.plotly_chart(
     candidate_score_bars_figure(scores, transformer_id),
-    use_container_width=True,
+    width='stretch',
 )
 
 quality = device["data_quality_flag"].value_counts().to_dict()

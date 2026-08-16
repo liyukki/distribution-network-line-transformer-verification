@@ -22,6 +22,6 @@ else:
     matrix = voltage.diff()
 correlation = matrix.corr()
 st.plotly_chart(
-    similarity_heatmap_figure(correlation), use_container_width=True
+    similarity_heatmap_figure(correlation), width='stretch'
 )
 st.caption("矩阵按所选模式在共同有效时间点上计算 Pearson 相关系数。")

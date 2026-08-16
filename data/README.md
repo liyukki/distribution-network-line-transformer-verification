@@ -47,7 +47,26 @@
 
 ## candidate_features.parquet / predictions.parquet / metrics.json
 
-候选特征表（12 列，含 peer_count 与 8 个特征 + coverage）、判定结果表（decision/confidence 等）与评价指标（precision/recall/f1/pr_auc/top1/top3/coverage/拒判率）。
+- candidate_features（打分后产物）：候选特征 12 列 + baseline_score/enhanced_score + available_feature_weight（该行可用特征权重占比，0–1；低于 scoring.evidence_weight_threshold 的候选不参与 best-feeder 比较）。
+- predictions：判定结果表，含 decision（insufficient_data/automatic_recommendation/no_change）、confidence（决策解释字段）与 anomaly_score（连续风险分，公式 coverage × min(1 − current_score, max(margin, 0))，证据不足样本为 0.0）。
+- metrics.json：precision/recall/f1（二值判定口径）、pr_auc（全样本主指标，连续 anomaly_score）、pr_auc_scored（scored 子集诊断指标，不可用为 null）、pr_auc_scored_applicable、scored_coverage、insufficient_data_rate、top{k}_correction_rate / top{k}_evaluated_count / top{k}_evaluation_coverage（k=1,2,3）、topk_applicable（嵌套 dict）、candidate_feeder_count、automatic_coverage、n_total/n_actual_errors/n_predicted、base_case_*（拓扑基础检查）。注意 metrics.json 含 null 与嵌套字段，消费方须按键安全取值，不得整体按 float 遍历。
+
+## simulation_validation.csv（逐时刻物理校验）
+
+| 字段 | 含义 |
+|---|---|
+| timestamp | 量测时刻 |
+| converged | 该时刻潮流是否收敛 |
+| voltage_min_pu / voltage_max_pu | 全网络电压范围 |
+| maximum_transformer_loading_percent | 最大变压器负载率 |
+| absolute_power_balance_error_mw | 功率平衡误差 |
+| violation_type | 违规类型（\| 连接、去重），空表示无违规 |
+| message | 违规详情（\| 连接） |
+| severity | ok / warning / critical；critical_violation_types 中的类型为 critical，terminate_on_critical=true 时流水线与实验案例失败 |
+
+## manifest.json（schema 2）
+
+artifact_schema_version=2；output_paths 只存相对文件名；output_sha256 记录每个输出产物的 SHA-256（verify_manifest_hashes 可检测篡改）；config_sha256、git_commit、python_version、package_versions、random_seed、status、failure_summary。
 
 ## 隐私与边界
 
