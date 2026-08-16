@@ -370,3 +370,40 @@ def test_later_exception_after_base_case_writes_self_verifying_failed_manifest(
     assert failure["error_type"] == "RuntimeError"
     assert failure["message"] == "probe"
     assert "stage" not in failure
+
+
+@pytest.mark.parametrize(
+    ("exc", "match"),
+    [
+        (KeyboardInterrupt("probe"), "probe"),
+        (SystemExit("probe"), "probe"),
+    ],
+)
+def test_interrupted_run_leaves_self_verifying_running_manifest(
+    tmp_path: Path, monkeypatch, exc: BaseException, match: str
+) -> None:
+    from ltverify import pipeline as pipeline_module
+
+    def interrupted_build_network(*args: object, **kwargs: object) -> object:
+        raise exc
+
+    config = _write_temp_config(tmp_path, "interrupt.yaml")
+    monkeypatch.setattr(
+        pipeline_module, "build_network", interrupted_build_network
+    )
+    monkeypatch.setattr(
+        pipeline_module, "_run_directory", lambda _: Path("interrupt-run")
+    )
+    with pytest.raises(type(exc), match=match):
+        run_pipeline(config)
+
+    run_dir = tmp_path / "interrupt-run"
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["status"] == "running"
+    assert (run_dir / "config.snapshot.yaml").exists()
+    assert "config.snapshot.yaml" in manifest["output_paths"]
+    assert (
+        manifest["output_sha256"]["config.snapshot.yaml"]
+        == manifest["config_sha256"]
+    )
+    verify_manifest_hashes(manifest, run_dir)

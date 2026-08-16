@@ -71,6 +71,46 @@ def _write_experiment_dir(tmp_path: Path) -> Path:
     return experiment_dir
 
 
+def _write_discoverable_experiment(
+    root: Path, dir_name: str, *, current: bool
+) -> Path:
+    experiment_dir = root / "runs" / dir_name
+    experiment_dir.mkdir(parents=True, exist_ok=True)
+    prefix = "robustness_" if current else "experiment_"
+    summary = pd.DataFrame(
+        {
+            "case_id": ["a", "b"],
+            "family": ["missing_rate", "missing_rate"],
+            "value": ["0.0", "0.1"],
+            "status": ["completed", "completed"],
+        }
+    )
+    summary_path = experiment_dir / f"{prefix}summary.csv"
+    summary.to_csv(summary_path, index=False)
+    aggregates_path = experiment_dir / f"{prefix}aggregates.csv"
+    _valid_aggregates_frame().to_csv(aggregates_path, index=False)
+    if current:
+        manifest = {
+            "artifact_schema_version": 2,
+            "experiment_config_name": "robustness.yaml",
+            "experiment_config_sha256": "0" * 64,
+            "experiment_config_snapshot": {},
+            "base_config_name": "default.yaml",
+            "base_config_sha256": "0" * 64,
+            "base_config_snapshot": {},
+            "case_counts": {"total": 2, "completed": 2, "failed": 0},
+            "output_files": {
+                "robustness_summary.csv": file_sha256(summary_path),
+                "robustness_aggregates.csv": file_sha256(aggregates_path),
+            },
+        }
+        (experiment_dir / "robustness_experiment_manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    return experiment_dir
+
+
 def _artifacts_with_schema(
     artifacts: RunArtifacts,
     version: object,
@@ -189,7 +229,7 @@ def test_robustness_page_auto_detects_legacy_aggregates(
     assert len(app_test.get("plotly_chart")) >= 1
 
 
-def test_robustness_page_prefers_new_aggregates_over_legacy(
+def test_robustness_page_skips_incomplete_current_and_prefers_legacy(
     tmp_path: Path, monkeypatch
 ) -> None:
     metrics = ["f1"]
@@ -215,7 +255,8 @@ def test_robustness_page_prefers_new_aggregates_over_legacy(
     app_test.run()
     raised = [element.value for element in app_test.exception]
     assert len(app_test.exception) == 0, raised
-    assert Path(app_test.text_input[0].value).resolve() == new_csv
+    assert Path(app_test.text_input[0].value).resolve() == legacy_csv
+    assert app_test.text_input[1].value == ""
 
 
 def test_robustness_page_does_not_mix_new_aggregates_with_legacy_summary(
@@ -246,8 +287,53 @@ def test_robustness_page_does_not_mix_new_aggregates_with_legacy_summary(
     app_test.run()
     raised = [element.value for element in app_test.exception]
     assert len(app_test.exception) == 0, raised
-    assert Path(app_test.text_input[0].value).resolve() == new_dir / "robustness_aggregates.csv"
-    assert app_test.text_input[1].value == ""
+    assert (
+        Path(app_test.text_input[0].value).resolve()
+        == legacy_dir / "experiment_aggregates.csv"
+    )
+    assert (
+        Path(app_test.text_input[1].value).resolve()
+        == legacy_dir / "experiment_summary.csv"
+    )
+
+
+def test_default_discovery_skips_incomplete_current_dir(
+    tmp_path: Path, monkeypatch
+) -> None:
+    new_dir = _write_discoverable_experiment(
+        tmp_path, "experiments-20260816T200000", current=True
+    )
+    (new_dir / "robustness_summary.csv").unlink()
+    (new_dir / "robustness_experiment_manifest.json").unlink()
+    old_dir = _write_discoverable_experiment(
+        tmp_path, "experiments-20260816T100000", current=True
+    )
+    monkeypatch.chdir(tmp_path)
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    assert (
+        Path(app_test.text_input[0].value).resolve()
+        == old_dir / "robustness_aggregates.csv"
+    )
+
+
+def test_default_discovery_falls_back_to_legacy_when_no_complete_current(
+    tmp_path: Path, monkeypatch
+) -> None:
+    legacy_dir = _write_discoverable_experiment(
+        tmp_path, "experiments-legacy", current=False
+    )
+    monkeypatch.chdir(tmp_path)
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    assert (
+        Path(app_test.text_input[0].value).resolve()
+        == legacy_dir / "experiment_aggregates.csv"
+    )
 
 
 def test_robustness_page_lists_complete_metrics(tmp_path: Path) -> None:
@@ -303,7 +389,7 @@ def test_robustness_page_lists_complete_metrics(tmp_path: Path) -> None:
 def test_robustness_page_handles_bad_aggregates(
     tmp_path: Path, content: str
 ) -> None:
-    path = tmp_path / "robustness_aggregates.csv"
+    path = tmp_path / "experiment_aggregates.csv"
     path.write_text(content, encoding="utf-8")
     app_test = AppTest.from_file(
         ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
@@ -320,7 +406,7 @@ def test_robustness_page_handles_bad_aggregates(
 def test_robustness_page_handles_non_numeric_metric(tmp_path: Path) -> None:
     aggregates = _valid_aggregates_frame()
     aggregates["mean_precision"] = "abc"
-    path = tmp_path / "robustness_aggregates.csv"
+    path = tmp_path / "experiment_aggregates.csv"
     aggregates.to_csv(path, index=False)
     app_test = AppTest.from_file(
         ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
@@ -497,6 +583,66 @@ def test_robustness_page_rejects_current_manifest_missing_core_hash(
     )
     app_test.run()
     app_test.text_input[0].set_value(str(experiment_dir / "robustness_aggregates.csv"))
+    app_test.text_input[1].set_value("")
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert len(app_test.error) >= 1
+    assert len(app_test.get("plotly_chart")) == 0
+
+
+def test_robustness_page_rejects_non_object_manifest(
+    tmp_path: Path,
+) -> None:
+    experiment_dir = _write_experiment_dir(tmp_path)
+    (experiment_dir / "robustness_experiment_manifest.json").write_text(
+        "[]", encoding="utf-8"
+    )
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(
+        str(experiment_dir / "robustness_aggregates.csv")
+    )
+    app_test.text_input[1].set_value(
+        str(experiment_dir / "robustness_summary.csv")
+    )
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert len(app_test.error) >= 1
+    assert len(app_test.get("plotly_chart")) == 0
+
+
+def test_robustness_page_handles_blank_family(tmp_path: Path) -> None:
+    aggregates = _valid_aggregates_frame()
+    aggregates.loc[1, "family"] = "   "
+    path = tmp_path / "experiment_aggregates.csv"
+    aggregates.to_csv(path, index=False)
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(path))
+    app_test.text_input[1].set_value("")
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert len(app_test.error) >= 1
+    assert len(app_test.get("plotly_chart")) == 0
+
+
+def test_robustness_page_handles_non_finite_metric(tmp_path: Path) -> None:
+    aggregates = _valid_aggregates_frame()
+    aggregates["mean_precision"] = [float("inf"), 0.8]
+    path = tmp_path / "experiment_aggregates.csv"
+    aggregates.to_csv(path, index=False)
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(path))
     app_test.text_input[1].set_value("")
     app_test.run()
     raised = [element.value for element in app_test.exception]

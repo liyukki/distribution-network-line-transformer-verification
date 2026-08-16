@@ -116,6 +116,67 @@ def test_verify_manifest_accepts_single_input_path(tmp_path: Path) -> None:
     verify_manifest_hashes(manifest, tmp_path)
 
 
+@pytest.mark.parametrize(
+    "bad_input_paths",
+    [
+        [["default.yaml"]],
+        [{"name": "default.yaml"}],
+    ],
+)
+def test_verify_manifest_rejects_non_string_input_path_elements(
+    tmp_path: Path, bad_input_paths: object
+) -> None:
+    manifest = _manifest_with_input_paths(bad_input_paths)
+    with pytest.raises(ValueError, match="input_paths"):
+        verify_manifest_hashes(manifest, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "bad_output_paths",
+    [
+        [["config.snapshot.yaml"]],
+        [{"name": "config.snapshot.yaml"}],
+        [1],
+    ],
+)
+def test_verify_manifest_rejects_non_string_output_path_elements(
+    tmp_path: Path, bad_output_paths: object
+) -> None:
+    manifest = _fake_manifest(bad_output_paths, {})
+    with pytest.raises(ValueError, match="output_paths"):
+        verify_manifest_hashes(manifest, tmp_path)
+
+
+def test_verify_manifest_rejects_non_dict_output_sha256(tmp_path: Path) -> None:
+    manifest = _fake_manifest([], "not-a-dict")
+    with pytest.raises(ValueError, match="output_sha256"):
+        verify_manifest_hashes(manifest, tmp_path)
+
+
+def test_verify_manifest_rejects_non_string_output_hash_value(
+    tmp_path: Path,
+) -> None:
+    manifest = _fake_manifest(["a.csv"], {"a.csv": 123})
+    with pytest.raises(ValueError, match="output_sha256|64 位"):
+        verify_manifest_hashes(manifest, tmp_path)
+
+
+def test_verify_manifest_rejects_non_list_output_paths(tmp_path: Path) -> None:
+    manifest = {
+        "output_paths": "a.csv",
+        "output_sha256": {},
+        "input_paths": ["default.yaml"],
+    }
+    with pytest.raises(ValueError, match="output_paths"):
+        verify_manifest_hashes(manifest, tmp_path)
+
+
+def test_verify_manifest_rejects_duplicate_output_paths(tmp_path: Path) -> None:
+    manifest = _fake_manifest(["a.csv", "a.csv"], {"a.csv": "0" * 64})
+    with pytest.raises(ValueError, match="output_paths"):
+        verify_manifest_hashes(manifest, tmp_path)
+
+
 def test_delivered_default_manifest_paths_are_portable() -> None:
     manifest_path = ROOT / "reports/metrics/default_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
