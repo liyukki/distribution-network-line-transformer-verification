@@ -132,6 +132,7 @@ def run_pipeline(config_path: Path) -> Path:
             run_dir / "confusion_matrix.csv",
             run_dir / "network_nodes.csv",
             run_dir / "network_edges.csv",
+            run_dir / "simulation_validation.csv",
         ]
         write_table_atomic(truth, outputs[0])
         write_table_atomic(ledger, outputs[1])
@@ -144,6 +145,7 @@ def run_pipeline(config_path: Path) -> Path:
         write_table_atomic(result.confusion_matrix.reset_index(), outputs[8])
         write_table_atomic(nodes, outputs[9])
         write_table_atomic(edges, outputs[10])
+        write_table_atomic(simulation.validation, outputs[11])
 
         manifest.status = "completed"
         manifest.finished_at_utc = datetime.now(UTC)
