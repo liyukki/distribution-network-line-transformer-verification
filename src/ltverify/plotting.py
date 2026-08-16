@@ -193,7 +193,7 @@ def robustness_line_figure(
     if missing:
         raise ValueError(
             f"robustness_line_figure 缺少列: {missing}；"
-            "请传入实验聚合产物 experiment_aggregates.csv（而非原始案例表 experiment_summary.csv）"
+            "请传入实验聚合产物 robustness_aggregates.csv（而非原始案例表 robustness_summary.csv）"
         )
     rows = summary[summary["family"] == family]
     numeric = pd.to_numeric(rows["value"].astype(str), errors="coerce")

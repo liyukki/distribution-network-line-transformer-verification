@@ -5,12 +5,13 @@ feature group at a time by zeroing its score weight. Clean simulation
 artifacts are cached by (seed, pv_scale) so all cases sharing physical
 data reuse the same power-flow results. Cases with simulation failures or
 critical physical violations are recorded as failed, never silently
-counted as completed. Every run writes an experiment_manifest.json with
-configuration, environment and output hashes.
+counted as completed. Every run writes a robustness_experiment_manifest.json
+with configuration, environment and output hashes.
 """
 
 import hashlib
 import platform
+import re
 import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -309,10 +310,31 @@ def _file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _resolve_base_config(experiment_path: Path, raw: dict) -> Path:
+    """Resolve base_config relative to the experiment YAML directory."""
+    base = Path(str(raw["base_config"]))
+    if not base.is_absolute():
+        base = (experiment_path.parent / base).resolve()
+    return base
+
+
+def _portable(value: object) -> object:
+    """Normalize every string to POSIX separators for portable manifests."""
+    if isinstance(value, dict):
+        return {key: _portable(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_portable(item) for item in value]
+    if isinstance(value, str):
+        return value.replace("\\", "/")
+    return value
+
+
 def run_experiments(path: Path, output_dir: Path) -> Path:
     """Run every case, write summaries and a manifest, return the dir."""
-    raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
-    base_config = load_config(Path(raw["base_config"]))
+    path = Path(path)
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    base_config_path = _resolve_base_config(path, raw)
+    base_config = load_config(base_config_path)
     cases = expand_experiment_grid(path)
     output_dir.mkdir(parents=True, exist_ok=True)
     cache: dict[tuple[int, float], tuple[object, object, object]] = {}
@@ -351,18 +373,20 @@ def run_experiments(path: Path, output_dir: Path) -> Path:
             )
         rows[-1]["runtime_seconds"] = time.perf_counter() - started
     summary = pd.DataFrame(rows, columns=SUMMARY_COLUMNS)
-    summary.to_csv(output_dir / "experiment_summary.csv", index=False)
+    summary.to_csv(output_dir / "robustness_summary.csv", index=False)
     aggregates = _aggregate(summary)
-    aggregates.to_csv(output_dir / "experiment_aggregates.csv", index=False)
+    aggregates.to_csv(output_dir / "robustness_aggregates.csv", index=False)
 
     manifest = {
         "artifact_schema_version": 2,
-        "experiment_config_path": str(path),
+        "experiment_config_name": path.name,
         "experiment_config_sha256": _file_sha256(path),
-        "experiment_config_snapshot": raw,
-        "base_config_path": raw.get("base_config"),
-        "base_config_sha256": _file_sha256(Path(raw["base_config"])),
-        "base_config_snapshot": base_config.model_dump(mode="json"),
+        "experiment_config_snapshot": _portable(raw),
+        "base_config_name": base_config_path.name,
+        "base_config_sha256": _file_sha256(base_config_path),
+        "base_config_snapshot": _portable(
+            base_config.model_dump(mode="json")
+        ),
         "git_commit": git_commit(),
         "python_version": platform.python_version(),
         "package_versions": package_versions(),
@@ -374,13 +398,95 @@ def run_experiments(path: Path, output_dir: Path) -> Path:
             "failed": int((summary["status"] == "failed").sum()),
         },
         "output_files": {
-            "experiment_summary.csv": _file_sha256(
-                output_dir / "experiment_summary.csv"
+            "robustness_summary.csv": _file_sha256(
+                output_dir / "robustness_summary.csv"
             ),
-            "experiment_aggregates.csv": _file_sha256(
-                output_dir / "experiment_aggregates.csv"
+            "robustness_aggregates.csv": _file_sha256(
+                output_dir / "robustness_aggregates.csv"
             ),
         },
     }
-    write_json_atomic(manifest, output_dir / "experiment_manifest.json")
+    write_json_atomic(
+        manifest, output_dir / "robustness_experiment_manifest.json"
+    )
     return output_dir
+
+
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+
+
+def verify_experiment_manifest(
+    manifest: dict[str, object],
+    artifact_dir: Path,
+    *,
+    experiment_config_path: Path | None = None,
+    base_config_path: Path | None = None,
+) -> None:
+    """Verify a robustness experiment manifest against its artifact dir.
+
+    Checks schema, safe relative output paths, 64-hex hashes, file
+    existence and byte equality, config hashes against the embedded
+    snapshots, and case-count consistency with the summary file. When the
+    caller provides the original config paths, their file hashes must
+    equal the recorded hashes.
+    """
+    artifact_dir = Path(artifact_dir)
+    schema = manifest.get("artifact_schema_version")
+    if not isinstance(schema, int) or isinstance(schema, bool) or schema != 2:
+        raise ValueError(f"不支持的 experiment manifest schema: {schema!r}")
+    output_files = manifest.get("output_files")
+    if not isinstance(output_files, dict) or not output_files:
+        raise ValueError("experiment manifest 的 output_files 为空或缺失")
+    for name, expected in output_files.items():
+        text = str(name)
+        if Path(text).is_absolute() or re.match(r"^[A-Za-z]:", text):
+            raise ValueError(f"output_files 不允许绝对路径: {text}")
+        if ".." in Path(text).parts:
+            raise ValueError(f"output_files 不允许路径穿越: {text}")
+        if len(set(output_files)) != len(output_files):
+            raise ValueError("output_files 存在重复条目")
+        if not _SHA256_PATTERN.match(str(expected)):
+            raise ValueError(f"output_files 哈希必须是 64 位十六进制: {text}")
+        path = artifact_dir / text
+        if not path.exists():
+            raise ValueError(f"experiment manifest 声明的文件不存在: {text}")
+        actual = _file_sha256(path)
+        if actual != expected:
+            raise ValueError(
+                f"实验产物校验失败: {text}（期望 {expected}，实际 {actual}）"
+            )
+    for key in ("experiment_config_sha256", "base_config_sha256"):
+        value = str(manifest.get(key, ""))
+        if not _SHA256_PATTERN.match(value):
+            raise ValueError(f"{key} 不是 64 位十六进制哈希")
+    if "experiment_config_snapshot" not in manifest:
+        raise ValueError("experiment manifest 缺少 experiment_config_snapshot")
+    if "base_config_snapshot" not in manifest:
+        raise ValueError("experiment manifest 缺少 base_config_snapshot")
+    if experiment_config_path is not None:
+        actual = _file_sha256(Path(experiment_config_path))
+        if actual != manifest["experiment_config_sha256"]:
+            raise ValueError(
+                f"experiment 配置文件哈希不一致: {experiment_config_path}"
+            )
+    if base_config_path is not None:
+        actual = _file_sha256(Path(base_config_path))
+        if actual != manifest["base_config_sha256"]:
+            raise ValueError(f"base 配置文件哈希不一致: {base_config_path}")
+    counts = manifest.get("case_counts", {})
+    total = int(counts.get("total", -1))
+    completed = int(counts.get("completed", -1))
+    failed = int(counts.get("failed", -1))
+    if total != completed + failed:
+        raise ValueError(
+            f"case_counts 不一致: total={total} != completed+failed="
+            f"{completed + failed}"
+        )
+    summary_path = artifact_dir / "robustness_summary.csv"
+    if not summary_path.exists():
+        raise ValueError("缺少 robustness_summary.csv")
+    summary_rows = len(pd.read_csv(summary_path))
+    if summary_rows != total:
+        raise ValueError(
+            f"summary 行数 {summary_rows} 与 case_counts.total {total} 不一致"
+        )

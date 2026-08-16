@@ -66,7 +66,7 @@
 
 ## manifest.json（schema 2）
 
-artifact_schema_version=2；output_paths 只存相对安全文件名（禁止绝对路径与 .. 穿越），与 output_sha256 严格一一对应（64 位十六进制 SHA-256）；config.snapshot.yaml 的哈希必须等于顶层 config_sha256（配置快照纳入哈希闭环，篡改后 verify_manifest_hashes 与报告生成都会拒绝）；另含 git_commit、python_version、package_versions、random_seed、status、failure_summary。实验清单（experiment_manifest.json）额外含 artifact_schema_version、experiment_config_sha256/snapshot、base_config_sha256/snapshot（解析后的基础配置）与输出文件哈希。
+artifact_schema_version=2；output_paths 只存相对安全文件名（禁止绝对路径与 .. 穿越），与 output_sha256 严格一一对应（64 位十六进制 SHA-256）；config.snapshot.yaml 的哈希必须等于顶层 config_sha256（配置快照纳入哈希闭环，篡改后 verify_manifest_hashes 与报告生成都会拒绝）；另含 git_commit、python_version、package_versions、random_seed、status、failure_summary。实验清单（robustness_experiment_manifest.json）额外含 artifact_schema_version、experiment_config_name/sha256/snapshot、base_config_name/sha256/snapshot（解析后的基础配置）与输出文件哈希（robustness_summary.csv / robustness_aggregates.csv），可用 verify_experiment_manifest 校验。
 
 ## 隐私与边界
 

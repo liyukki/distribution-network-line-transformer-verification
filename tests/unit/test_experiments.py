@@ -128,7 +128,7 @@ output_root: {tmp_path.as_posix()}
     )
     output_dir = tmp_path / "out"
     run_experiments(robustness, output_dir)
-    summary = pd.read_csv(output_dir / "experiment_summary.csv")
+    summary = pd.read_csv(output_dir / "robustness_summary.csv")
     assert len(summary) == 1
     assert (summary["status"] == "failed").all()
 
@@ -231,6 +231,8 @@ def test_base_config_resolves_relative_to_experiment_yaml(
     tmp_path: Path, monkeypatch
 ) -> None:
     import json
+
+    from ltverify.experiments import run_experiments
 
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()

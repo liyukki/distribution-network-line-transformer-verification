@@ -99,7 +99,7 @@ python -m ltverify experiments --config configs/robustness.yaml
 
 **口径说明**：PR-AUC 仅在测试集同时含正负样本时适用，单类别真值时为 null（不适用）而非 0；pr_auc_scored 为仅可评分子集的诊断口径，须与 scored_coverage 同时解读。Top-k 排名只接受有限分数与有限证据权重，NaN 与正负无穷候选一律排除并计数。配置快照 config.snapshot.yaml 纳入清单哈希闭环，被篡改后报告生成会拒绝。物理越限默认零容忍（四类违规均为 critical，terminate_on_critical=true 时流水线与实验案例失败）；潮流不收敛始终是硬失败。看板对 schema 采取三态兼容：缺失/旧版提示不兼容并隐藏不可靠字段，未来版本提示未验证。Streamlit 最低版本 1.51；report 命令的源清单副本可通过 --manifest-output 显式指定（默认 <输出名>.manifest.json）。
 
-**鲁棒性与消融实验**：130 案例矩阵的原始与聚合结果见 reports/metrics/robustness_summary.csv 与 robustness_aggregates.csv（含逐案例物理字段与 experiment_manifest.json 哈希）。
+**鲁棒性与消融实验**：130 案例矩阵的原始与聚合结果见 reports/metrics/robustness_summary.csv 与 robustness_aggregates.csv（含逐案例物理字段）；权威实验清单为 robustness_experiment_manifest.json（含实验配置与基础配置的哈希/快照，可用 verify_experiment_manifest 校验）。
 
 ## 项目限制
 

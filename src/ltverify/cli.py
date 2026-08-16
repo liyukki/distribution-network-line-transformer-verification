@@ -81,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:  # noqa: BLE001 - CLI top-level boundary
             print(f"experiments failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
-        summary = pd.read_csv(output_dir / "experiment_summary.csv")
+        summary = pd.read_csv(output_dir / "robustness_summary.csv")
         if len(summary) and (summary["status"] != "completed").all():
             print("every experiment case failed", file=sys.stderr)
             return 1

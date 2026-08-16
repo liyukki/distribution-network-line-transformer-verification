@@ -53,7 +53,7 @@ def test_robustness_page_renders_with_tmp_aggregates(tmp_path: Path) -> None:
             **{f"std_{metric}": [0.05, 0.06] for metric in metrics},
         }
     )
-    csv_path = tmp_path / "experiment_aggregates.csv"
+    csv_path = tmp_path / "robustness_aggregates.csv"
     aggregates.to_csv(csv_path, index=False)
     app_test = AppTest.from_file(
         ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
@@ -88,7 +88,7 @@ def test_robustness_page_lists_complete_metrics(tmp_path: Path) -> None:
             **{f"std_{metric}": [0.05, 0.06] for metric in metric_columns},
         }
     )
-    csv_path = tmp_path / "experiment_aggregates.csv"
+    csv_path = tmp_path / "robustness_aggregates.csv"
     aggregates.to_csv(csv_path, index=False)
     app_test = AppTest.from_file(
         ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120

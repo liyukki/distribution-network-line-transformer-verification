@@ -14,8 +14,8 @@ def _default_path(pattern: str) -> str:
 
 
 aggregates_path = st.text_input(
-    "实验聚合 CSV 路径（experiment_aggregates.csv）",
-    value=_default_path("experiments-*/experiment_aggregates.csv"),
+    "实验聚合 CSV 路径（robustness_aggregates.csv）",
+    value=_default_path("experiments-*/robustness_aggregates.csv"),
 )
 if not aggregates_path:
     st.info(
@@ -68,8 +68,8 @@ with st.expander("聚合汇总"):
     st.dataframe(aggregates, width='stretch')
 
 summary_path = st.text_input(
-    "案例明细 CSV 路径（experiment_summary.csv，仅用于明细与失败原因）",
-    value=_default_path("experiments-*/experiment_summary.csv"),
+    "案例明细 CSV 路径（robustness_summary.csv，仅用于明细与失败原因）",
+    value=_default_path("experiments-*/robustness_summary.csv"),
 )
 if summary_path and Path(summary_path).exists():
     summary = pd.read_csv(summary_path)

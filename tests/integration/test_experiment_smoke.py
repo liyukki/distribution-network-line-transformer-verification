@@ -83,11 +83,11 @@ seeds: [42, 43]
     )
     output_dir = tmp_path / "experiments"
     run_experiments(robustness, output_dir)
-    summary = pd.read_csv(output_dir / "experiment_summary.csv")
+    summary = pd.read_csv(output_dir / "robustness_summary.csv")
     assert set(SUMMARY_COLUMNS) <= set(summary.columns)
     assert len(summary) == 2
     assert (summary["status"] == "completed").all()
-    aggregates = pd.read_csv(output_dir / "experiment_aggregates.csv")
+    aggregates = pd.read_csv(output_dir / "robustness_aggregates.csv")
     assert "failure_count" in aggregates.columns
     assert "mean_pr_auc" in aggregates.columns
     assert "mean_pr_auc_scored" in aggregates.columns
