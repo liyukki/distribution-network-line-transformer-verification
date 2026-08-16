@@ -2,11 +2,13 @@
 
 For every timestamp the load and PV profiles are written into the network,
 one power flow is solved and per-transformer and per-feeder measurements are
-exported. Non-convergence is collected into the failures frame and never
-silently dropped; the pipeline decides whether to stop on failures.
+exported. Every timestamp gets a physical validation record (convergence,
+voltage range, transformer loading, power balance); non-convergence is
+collected into the failures frame and never silently dropped. After a
+non-converged step the solver falls back to a flat start.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pandapower as pp
 import pandas as pd
@@ -14,6 +16,7 @@ import pandas as pd
 from ltverify.config import ValidationConfig
 from ltverify.network import NetworkArtifacts
 from ltverify.profiles import TimeSeriesProfiles
+from ltverify.validation import check_solved_network
 
 
 @dataclass(frozen=True)
@@ -21,6 +24,7 @@ class SimulationResult:
     transformer_measurements: pd.DataFrame
     feeder_measurements: pd.DataFrame
     failures: pd.DataFrame
+    validation: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 def simulate_time_series(
@@ -33,8 +37,7 @@ def simulate_time_series(
     Transformer P/Q use the HV-side transformer results with the convention
     that positive means the transformer consumes power; feeder P/Q are the
     head-line from-side flows, positive when the feeder imports from the
-    main bus. validation_cfg is accepted for interface compatibility with
-    the pipeline and is not applied here; the pipeline validates afterwards.
+    main bus. validation_cfg drives the per-timestep physical checks.
     """
     net = artifacts.net
     asset_table = artifacts.asset_table
@@ -53,14 +56,16 @@ def simulate_time_series(
     transformer_rows: list[dict[str, object]] = []
     feeder_rows: list[dict[str, object]] = []
     failure_rows: list[dict[str, object]] = []
+    validation_rows: list[dict[str, object]] = []
 
+    last_step_failed = False
     for step, timestamp in enumerate(profiles.index):
         net.load.loc[load_indices, "p_mw"] = profiles.load_p_mw.iloc[step].to_numpy()
         net.load.loc[load_indices, "q_mvar"] = profiles.load_q_mvar.iloc[step].to_numpy()
         net.sgen.loc[pv_indices, "p_mw"] = (
             profiles.pv_p_mw.iloc[step][pv_columns].to_numpy()
         )
-        init_mode = "auto" if step == 0 else "results"
+        init_mode = "auto" if step == 0 or last_step_failed else "results"
         try:
             pp.runpp(net, calculate_voltage_angles=False, init=init_mode)
         except pp.LoadflowNotConverged as exc:
@@ -71,7 +76,41 @@ def simulate_time_series(
                     "message": f"load flow did not converge: {exc}",
                 }
             )
+            validation_rows.append(
+                {
+                    "timestamp": timestamp,
+                    "converged": False,
+                    "voltage_min_pu": float("nan"),
+                    "voltage_max_pu": float("nan"),
+                    "maximum_transformer_loading_percent": float("nan"),
+                    "absolute_power_balance_error_mw": float("nan"),
+                    "violation_type": "non_convergence",
+                    "message": f"load flow did not converge: {exc}",
+                    "severity": "critical",
+                }
+            )
+            last_step_failed = True
             continue
+
+        check = check_solved_network(net, validation_cfg)
+        validation_rows.append(
+            {
+                "timestamp": timestamp,
+                "converged": check.converged,
+                "voltage_min_pu": check.voltage_min_pu,
+                "voltage_max_pu": check.voltage_max_pu,
+                "maximum_transformer_loading_percent": (
+                    check.maximum_transformer_loading_percent
+                ),
+                "absolute_power_balance_error_mw": (
+                    check.absolute_power_balance_error_mw
+                ),
+                "violation_type": "|".join(check.violation_types),
+                "message": " | ".join(check.messages),
+                "severity": check.severity,
+            }
+        )
+        last_step_failed = False
 
         for transformer_id, lv_bus, trafo_index in zip(
             transformer_ids, lv_buses, trafo_indices
@@ -101,4 +140,5 @@ def simulate_time_series(
         transformer_measurements=pd.DataFrame(transformer_rows),
         feeder_measurements=pd.DataFrame(feeder_rows),
         failures=pd.DataFrame(failure_rows),
+        validation=pd.DataFrame(validation_rows),
     )

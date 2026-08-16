@@ -54,11 +54,13 @@ def run_pipeline(config_path: Path) -> Path:
         shutil.copyfile(config_path, run_dir / "config.snapshot.yaml")
         artifacts = build_network(config.network)
 
-        static = run_static_validation(artifacts, config.validation)
-        if not static.converged:
-            raise RuntimeError("static power flow did not converge")
-        if static.violations:
-            raise RuntimeError(f"static validation violations: {static.violations}")
+        base_case = run_static_validation(artifacts, config.validation)
+        if not base_case.converged:
+            raise RuntimeError("base-case power flow did not converge")
+        if base_case.violations:
+            raise RuntimeError(
+                f"base-case validation violations: {base_case.violations}"
+            )
 
         profiles = generate_profiles(
             artifacts, config.profiles, seed=config.random_seed
@@ -72,6 +74,15 @@ def run_pipeline(config_path: Path) -> Path:
                 f"simulation failed at {failure['timestamp']}: "
                 f"{failure['error_type']} - {failure['message']}"
             )
+        if config.validation.terminate_on_critical and len(simulation.validation):
+            critical = simulation.validation[
+                simulation.validation["severity"] == "critical"
+            ]
+            if len(critical):
+                stamps = critical["timestamp"].head(3).tolist()
+                raise RuntimeError(
+                    f"critical physical violations at timestamps: {stamps}"
+                )
 
         truth = build_truth(artifacts)
         ledger = corrupt_ledger(
@@ -102,11 +113,11 @@ def run_pipeline(config_path: Path) -> Path:
 
         nodes, edges = topology_frames(artifacts)
         metrics = dict(result.metrics)
-        metrics["static_converged"] = static.converged
-        metrics["static_voltage_min_pu"] = static.voltage_min_pu
-        metrics["static_voltage_max_pu"] = static.voltage_max_pu
-        metrics["static_balance_error_mw"] = (
-            static.absolute_power_balance_error_mw
+        metrics["base_case_converged"] = base_case.converged
+        metrics["base_case_voltage_min_pu"] = base_case.voltage_min_pu
+        metrics["base_case_voltage_max_pu"] = base_case.voltage_max_pu
+        metrics["base_case_balance_error_mw"] = (
+            base_case.absolute_power_balance_error_mw
         )
 
         outputs: list[Path] = [

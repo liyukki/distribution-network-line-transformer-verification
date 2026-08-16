@@ -156,6 +156,20 @@ def _run_case(
         simulation = simulate_time_series(artifacts, profiles, config.validation)
         cache[cache_key] = (artifacts, profiles, simulation)
 
+    if not simulation.failures.empty:
+        raise RuntimeError(
+            "simulation failures: "
+            f"{simulation.failures.head(3).to_dict('records')}"
+        )
+    if config.validation.terminate_on_critical and len(simulation.validation):
+        critical = simulation.validation[
+            simulation.validation["severity"] == "critical"
+        ]
+        if len(critical):
+            raise RuntimeError(
+                "critical physical violations in experiment case"
+            )
+
     truth = build_truth(artifacts)
     ledger = corrupt_ledger(
         truth, config.corruption.ledger_error_rate, seed=seed

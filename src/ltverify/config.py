@@ -26,6 +26,9 @@ class ProfileConfig(BaseModel):
 class ValidationConfig(BaseModel):
     voltage_min_pu: float = 0.90
     voltage_max_pu: float = 1.10
+    power_balance_tolerance_mw: float = Field(default=1e-6, gt=0.0)
+    transformer_loading_limit_percent: float = Field(default=100.0, gt=0.0)
+    terminate_on_critical: bool = True
 
     @model_validator(mode="after")
     def ordered_limits(self) -> "ValidationConfig":
