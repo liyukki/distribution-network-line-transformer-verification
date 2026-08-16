@@ -3,6 +3,9 @@ __pycache__/
 .pytest_cache/
 .coverage
 .ruff_cache/
+build/
+dist/
+.ipynb_checkpoints/
 data/raw/
 data/interim/
 data/processed/
