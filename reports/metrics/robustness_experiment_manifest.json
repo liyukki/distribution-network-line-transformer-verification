@@ -1,9 +1,9 @@
 {
   "artifact_schema_version": 2,
-  "experiment_config_path": "configs\\robustness.yaml",
-  "experiment_config_sha256": "ebd763aa865611d91a08e3219504a4a3f096d69de4f6db40bd3130d3f61391da",
+  "experiment_config_name": "robustness.yaml",
+  "experiment_config_sha256": "cdee20e73417f038813fc6a6a7b3e339bfab576661c864f1149a44e8e491f72e",
   "experiment_config_snapshot": {
-    "base_config": "configs/default.yaml",
+    "base_config": "default.yaml",
     "experiments": {
       "ledger_error_rate": [
         0.05,
@@ -52,8 +52,8 @@
       46
     ]
   },
-  "base_config_path": "configs/default.yaml",
-  "base_config_sha256": "7b966854bb4576ceabf8c7c24d44e0046e536399f4ce20be4d51d5c68dbb04fb",
+  "base_config_name": "default.yaml",
+  "base_config_sha256": "b42381de2068eeebb7240db5358f3117aeff597be1332d6221d25c4d040341fc",
   "base_config_snapshot": {
     "random_seed": 42,
     "network": {
@@ -77,7 +77,6 @@
       "transformer_loading_limit_percent": 100.0,
       "terminate_on_critical": true,
       "critical_violation_types": [
-        "non_convergence",
         "power_balance",
         "voltage_out_of_bounds",
         "transformer_overload"
@@ -103,7 +102,7 @@
     },
     "output_root": "runs"
   },
-  "git_commit": "94ee059f7ed2071e16a76b8fcbf31c07a0ec7359",
+  "git_commit": "59a623e09b4ea470a149a93d9e8efa51d2008fe7",
   "python_version": "3.12.13",
   "package_versions": {
     "pandapower": "3.5.4",
@@ -113,15 +112,15 @@
     "scikit-learn": "1.9.0",
     "pyarrow": "24.0.0"
   },
-  "started_at_utc": "2026-08-16T08:32:29.460154+00:00",
-  "finished_at_utc": "2026-08-16T09:06:16.789186+00:00",
+  "started_at_utc": "2026-08-16T10:46:06.047106+00:00",
+  "finished_at_utc": "2026-08-16T11:11:20.393598+00:00",
   "case_counts": {
     "total": 130,
     "completed": 130,
     "failed": 0
   },
   "output_files": {
-    "experiment_summary.csv": "50bbc4bf344c9d9647bc0f11e7e5c08abc29c9ecfade29b82daf89554607fc1a",
-    "experiment_aggregates.csv": "4a68854c7f59ffd5c257f840f516b8fb511f095f225da03470855a8137219aa3"
+    "robustness_summary.csv": "c0b10b60bd69f39b08f3d9ccb5cbe34913e7c4be06f1346fa64a5e0497e5fde0",
+    "robustness_aggregates.csv": "b4bf6987d32cdbe1e72e8e2df84b91157cdaaeec796070086c18cc0ca35fc8d6"
   }
 }
