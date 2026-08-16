@@ -129,18 +129,19 @@ def test_topk_ignores_nan_candidates_and_row_order() -> None:
         *_nan_candidate_fixture(["F03", "F02", "F01"])
     )
     assert first.metrics["top2_correction_rate"] == second.metrics["top2_correction_rate"]
-    # 物理馈线 F02 位于 NaN 行，不得进入 Top-2 产生虚假命中
-    assert first.metrics["top2_correction_rate"] == 0.0
+    # 物理馈线 F02 位于 NaN 行，不得进入 Top-2 产生虚假命中；
+    # 该设备有效候选 1 个（<2），Top-2 不可评价 → 不计入分母
+    assert first.metrics["top2_correction_rate"] is None
     assert first.metrics["top2_evaluated_count"] == 0
     assert first.metrics["top2_evaluation_coverage"] == 0.0
 
 
 def test_topk_evaluation_coverage_counts_only_eligible_devices() -> None:
     predictions, truth, ledger, candidate_scores = evaluation_fixture()
-    # T002（真实错误）只有两个有限候选，Top-2 不可评价
+    # T002（真实错误）只剩一个有限候选（<2），Top-2 不可评价
     candidate_scores.loc[
         (candidate_scores["transformer_id"] == "T002")
-        & (candidate_scores["candidate_feeder_id"] == "F03"),
+        & (candidate_scores["candidate_feeder_id"] != "F01"),
         "enhanced_score",
     ] = float("nan")
     result = evaluate_predictions(predictions, truth, ledger, candidate_scores)
@@ -173,5 +174,5 @@ def test_evaluate_applies_evidence_weight_threshold() -> None:
         predictions, truth, ledger, candidate_scores,
         evidence_weight_threshold=0.5,
     )
-    # F01 被排除后 T001 的 Top-1 命中失败（物理馈线被排除在排名外）
+    # T001 的物理馈线 F01 被证据门槛排除；T002 的 Top-1 是 F01(0.8) 而非物理 F02
     assert result.metrics["top1_correction_rate"] == 0.0

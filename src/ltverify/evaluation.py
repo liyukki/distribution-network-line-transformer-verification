@@ -32,6 +32,7 @@ def evaluate_predictions(
     truth: pd.DataFrame,
     ledger: pd.DataFrame,
     candidate_scores: pd.DataFrame,
+    evidence_weight_threshold: float = 0.0,
 ) -> EvaluationResult:
     """Evaluate detection and feeder correction against the physical truth."""
     merged = predictions.merge(
@@ -54,13 +55,25 @@ def evaluate_predictions(
         )
     anomaly_score = merged["anomaly_score"].astype(float)
     pr_auc = average_precision_score(actual.astype(int), anomaly_score)
+    scored_mask = merged["decision"] != "insufficient_data"
+    if scored_mask.any() and actual[scored_mask].nunique() == 2:
+        pr_auc_scored = float(
+            average_precision_score(
+                actual[scored_mask].astype(int),
+                anomaly_score[scored_mask],
+            )
+        )
+        pr_auc_scored_applicable = True
+    else:
+        pr_auc_scored = None
+        pr_auc_scored_applicable = False
     matrix = confusion_matrix(actual, predicted, labels=[False, True])
 
     candidate_feeders = sorted(
         candidate_scores["candidate_feeder_id"].unique().tolist()
     )
     candidate_count = len(candidate_feeders)
-    topk: dict[str, float | None] = {}
+    topk: dict[str, float | int | None] = {}
     topk_applicable: dict[str, bool] = {}
     error_rows = merged[actual]
     for k in (1, 2, 3):
@@ -68,28 +81,60 @@ def evaluate_predictions(
         topk_applicable[f"top{k}"] = applicable
         if not applicable:
             topk[f"top{k}_correction_rate"] = None
+            topk[f"top{k}_evaluated_count"] = 0
+            topk[f"top{k}_evaluation_coverage"] = None
             continue
-        if len(error_rows):
-            hits = 0
-            for transformer_id in error_rows["transformer_id"]:
-                scores = candidate_scores[
-                    candidate_scores["transformer_id"] == transformer_id
-                ].sort_values("enhanced_score", ascending=False)
-                physical = truth.loc[
-                    truth["transformer_id"] == transformer_id,
-                    "physical_feeder_id",
-                ].iloc[0]
-                if physical in scores["candidate_feeder_id"].head(k).tolist():
-                    hits += 1
-            topk[f"top{k}_correction_rate"] = hits / len(error_rows)
+        hits = 0
+        evaluated = 0
+        for transformer_id in error_rows["transformer_id"]:
+            rows = candidate_scores[
+                candidate_scores["transformer_id"] == transformer_id
+            ].copy()
+            finite_scores = pd.to_numeric(
+                rows["enhanced_score"], errors="coerce"
+            )
+            if "available_feature_weight" in rows.columns:
+                weights = pd.to_numeric(
+                    rows["available_feature_weight"], errors="coerce"
+                )
+            else:
+                weights = pd.Series(1.0, index=rows.index)
+            eligible_mask = (
+                finite_scores.notna()
+                & weights.notna()
+                & (weights >= evidence_weight_threshold)
+            )
+            eligible = rows[eligible_mask]
+            if len(eligible) < k:
+                # 有效候选不足 k，该设备对 Top-k 不可评价
+                continue
+            ranked = eligible.sort_values(
+                ["enhanced_score", "candidate_feeder_id"],
+                ascending=[False, True],
+            )
+            physical = truth.loc[
+                truth["transformer_id"] == transformer_id,
+                "physical_feeder_id",
+            ].iloc[0]
+            evaluated += 1
+            if physical in ranked["candidate_feeder_id"].head(k).tolist():
+                hits += 1
+        if evaluated == 0:
+            topk[f"top{k}_correction_rate"] = None
         else:
-            topk[f"top{k}_correction_rate"] = float("nan")
+            topk[f"top{k}_correction_rate"] = hits / evaluated
+        topk[f"top{k}_evaluated_count"] = evaluated
+        topk[f"top{k}_evaluation_coverage"] = (
+            evaluated / len(error_rows) if len(error_rows) else None
+        )
 
     metrics: dict[str, float | int | None] = {
         "precision": float(precision),
         "recall": float(recall),
         "f1": float(f1),
         "pr_auc": float(pr_auc),
+        "pr_auc_scored": pr_auc_scored,
+        "pr_auc_scored_applicable": pr_auc_scored_applicable,
         **topk,
         "topk_applicable": topk_applicable,
         "candidate_feeder_count": candidate_count,
