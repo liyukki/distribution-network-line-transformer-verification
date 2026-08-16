@@ -37,12 +37,27 @@ metric = st.selectbox(
         "precision",
         "recall",
         "f1",
+        "pr_auc",
+        "pr_auc_scored",
         "top1_correction_rate",
         "top2_correction_rate",
         "automatic_coverage",
+        "scored_coverage",
+        "insufficient_data_rate",
         "convergence_rate",
     ],
 )
+st.caption(
+    "pr_auc 为主样本口径；pr_auc_scored 为仅可评分子集的诊断口径，"
+    "须与 scored_coverage 同时解读；空值显示为不适用。"
+)
+mean_column = f"mean_{metric}"
+if mean_column not in aggregates.columns:
+    st.info(f"{metric} 不适用：聚合产物缺少 {mean_column} 列")
+    st.stop()
+if aggregates[mean_column].isna().all():
+    st.info(f"{metric} 不适用：所有聚合样本为空值")
+    st.stop()
 try:
     figure = robustness_line_figure(aggregates, family, metric)
 except ValueError as exc:

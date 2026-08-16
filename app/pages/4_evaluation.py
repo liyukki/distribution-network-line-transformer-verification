@@ -11,15 +11,28 @@ if artifacts is None:
     st.info("请先在主页加载运行目录。")
     st.stop()
 
-legacy_run = (
-    artifacts.manifest.get("artifact_schema_version") != 2
-    or "anomaly_score" not in artifacts.predictions.columns
-)
-if legacy_run:
+raw_version = artifacts.manifest.get("artifact_schema_version")
+try:
+    schema_version = int(raw_version)
+except (TypeError, ValueError):
+    schema_version = None
+if schema_version is None or schema_version < 2:
+    schema_state = "legacy"
+elif schema_version == 2:
+    schema_state = "current"
+else:
+    schema_state = "newer"
+
+if schema_state == "legacy":
     st.warning(
         "该运行目录由旧版本生成（指标口径不兼容），"
         "旧版 PR-AUC 不作为当前口径展示，PR 曲线不可用；"
         "请重新运行 python -m ltverify run-all 后再查看。"
+    )
+elif schema_state == "newer":
+    st.warning(
+        f"该运行目录使用未验证的 schema 版本 {schema_version}；"
+        "仅展示已验证的有限字段。"
     )
 
 st.plotly_chart(
@@ -44,7 +57,7 @@ key_metrics = {
         "n_actual_errors",
     )
 }
-if legacy_run:
+if schema_state == "legacy":
     key_metrics.pop("pr_auc", None)
     key_metrics.pop("pr_auc_scored", None)
 st.dataframe(pd.DataFrame([key_metrics]), width='stretch')
@@ -55,7 +68,7 @@ st.caption(
 )
 
 if st.session_state.get("demo_mode"):
-    if legacy_run:
+    if schema_state == "legacy" or "anomaly_score" not in artifacts.predictions.columns:
         st.info("旧版运行目录不绘制 PR 曲线。")
     else:
         truth = artifacts.truth.set_index("transformer_id")
