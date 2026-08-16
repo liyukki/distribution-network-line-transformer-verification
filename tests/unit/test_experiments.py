@@ -222,6 +222,82 @@ seeds: [42]
         encoding="utf-8",
     )
     run_experiments(robustness, tmp_path / "out2")
-    summary = pd.read_csv(tmp_path / "out2" / "experiment_summary.csv")
+    summary = pd.read_csv(tmp_path / "out2" / "robustness_summary.csv")
     assert len(summary) == 1
     assert (summary["status"] == "failed").all()
+
+
+def test_base_config_resolves_relative_to_experiment_yaml(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import json
+
+    config_dir = tmp_path / "cfg"
+    config_dir.mkdir()
+    base = config_dir / "default.yaml"
+    base.write_text(
+        f"""random_seed: 42
+network:
+  feeder_count: 3
+  transformers_per_feeder: 3
+  hv_kv: 110.0
+  mv_kv: 10.0
+  lv_kv: 0.4
+profiles:
+  start: "2026-01-01"
+  days: 1
+  interval_minutes: 360
+  power_factor: 0.95
+  pv_scale: 1.0
+validation:
+  voltage_min_pu: 0.90
+  voltage_max_pu: 1.10
+  power_balance_tolerance_mw: 0.000001
+  transformer_loading_limit_percent: 100.0
+  terminate_on_critical: true
+corruption:
+  ledger_error_rate: 0.10
+  voltage_noise_std_pu: 0.0005
+  missing_rate: 0.01
+  spike_rate: 0.001
+  time_shift_steps: 0
+  time_shift_device_rate: 0.10
+scoring:
+  current_score_threshold: 0.70
+  margin_threshold: 0.08
+  minimum_coverage: 0.80
+output_root: {tmp_path.as_posix()}
+""",
+        encoding="utf-8",
+    )
+    robustness = config_dir / "robustness.yaml"
+    robustness.write_text(
+        "base_config: default.yaml\n"
+        "experiments:\n"
+        "  ledger_error_rate: [0.10]\n"
+        "ablation_features: []\n"
+        "seeds: [42]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "out"
+    run_experiments(robustness, output_dir)
+    manifest_path = output_dir / "robustness_experiment_manifest.json"
+    assert manifest_path.exists()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    # 清单不含盘符绝对路径或 Windows 反斜杠逻辑路径
+    def walk_strings(value: object) -> list[str]:
+        found: list[str] = []
+        if isinstance(value, str):
+            found.append(value)
+        elif isinstance(value, dict):
+            for item in value.values():
+                found.extend(walk_strings(item))
+        elif isinstance(value, list):
+            for item in value:
+                found.extend(walk_strings(item))
+        return found
+
+    for text in walk_strings(manifest):
+        assert "\\" not in text
+        assert "D:\\" not in text.replace("\\", "\\")

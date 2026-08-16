@@ -129,3 +129,53 @@ def test_report_manifest_output_contract(tmp_path: Path) -> None:
     another = tmp_path / "another_summary.json"
     generate_default_summary(run_dir, another)
     assert (tmp_path / "another_summary.manifest.json").exists()
+
+
+def test_report_verifies_before_parsing(monkeypatch, tmp_path: Path) -> None:
+    run_dir = _fixture_run(tmp_path)
+    (run_dir / "predictions.parquet").write_bytes(b"tampered")
+    calls: list[str] = []
+
+    def forbidden_loader(*args: object, **kwargs: object) -> object:
+        calls.append("load_run_artifacts")
+        raise AssertionError("解析器不得在验签前执行")
+
+    def forbidden_config(*args: object, **kwargs: object) -> object:
+        calls.append("load_config")
+        raise AssertionError("配置解析不得在验签前执行")
+
+    monkeypatch.setattr("ltverify.report.load_run_artifacts", forbidden_loader)
+    monkeypatch.setattr("ltverify.report.load_config", forbidden_config)
+    with pytest.raises(ValueError, match="产物校验失败"):
+        generate_default_summary(run_dir, tmp_path / "summary.json")
+    assert calls == []
+
+
+def test_tampered_snapshot_yields_integrity_error_not_parse_error(
+    tmp_path: Path,
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    (run_dir / "config.snapshot.yaml").write_text(
+        "key: [unclosed", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="产物校验失败"):
+        generate_default_summary(run_dir, tmp_path / "summary.json")
+
+
+def test_report_rejects_output_collisions(tmp_path: Path) -> None:
+    run_dir = _fixture_run(tmp_path)
+    same = tmp_path / "same.json"
+    with pytest.raises(ValueError, match="相同"):
+        generate_default_summary(run_dir, same, manifest_output=same)
+    assert not same.exists()
+    # resolve 后相同的两条路径
+    output = tmp_path / "out.json"
+    manifest_alias = tmp_path / "sub" / ".." / "out.json"
+    with pytest.raises(ValueError, match="相同"):
+        generate_default_summary(run_dir, output, manifest_output=manifest_alias)
+    assert not output.exists()
+    # 覆盖源清单声明产物
+    with pytest.raises(ValueError, match="源产物"):
+        generate_default_summary(run_dir, run_dir / "manifest.json")
+    with pytest.raises(ValueError, match="源产物"):
+        generate_default_summary(run_dir, run_dir / "predictions.parquet")

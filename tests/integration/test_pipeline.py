@@ -93,3 +93,74 @@ def test_base_case_warning_violations_do_not_stop_pipeline(monkeypatch) -> None:
     monkeypatch.setattr(pipeline_module, "run_static_validation", warning_static)
     run_dir = run_pipeline(Path("tests/fixtures/small_config.yaml"))
     assert run_dir.exists()
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["base_case_violation_count"] == 1
+    assert metrics["base_case_violation_types"] == ["transformer_overload"]
+    assert metrics["base_case_violations"] == [
+        "transformer overload: trafo 1 at 110.0%"
+    ]
+    assert metrics["base_case_severity"] == "warning"
+
+
+def test_critical_base_case_with_terminate_off_is_recorded(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from ltverify import pipeline as pipeline_module
+    from ltverify.validation import PowerFlowValidation
+
+    def critical_static(*args: object, **kwargs: object) -> PowerFlowValidation:
+        return PowerFlowValidation(
+            converged=True,
+            voltage_min_pu=0.90,
+            voltage_max_pu=1.05,
+            absolute_power_balance_error_mw=1e-9,
+            violations=("transformer overload: trafo 1 at 150.0%",),
+            severity="critical",
+            violation_types=("transformer_overload",),
+        )
+
+    config = tmp_path / "relaxed.yaml"
+    config.write_text(
+        f"""random_seed: 42
+network:
+  feeder_count: 3
+  transformers_per_feeder: 3
+  hv_kv: 110.0
+  mv_kv: 10.0
+  lv_kv: 0.4
+profiles:
+  start: "2026-01-01"
+  days: 1
+  interval_minutes: 360
+  power_factor: 0.95
+  pv_scale: 1.0
+validation:
+  voltage_min_pu: 0.90
+  voltage_max_pu: 1.10
+  power_balance_tolerance_mw: 0.000001
+  transformer_loading_limit_percent: 100.0
+  terminate_on_critical: false
+  critical_violation_types: [power_balance, voltage_out_of_bounds, transformer_overload]
+corruption:
+  ledger_error_rate: 0.10
+  voltage_noise_std_pu: 0.0005
+  missing_rate: 0.01
+  spike_rate: 0.001
+  time_shift_steps: 0
+  time_shift_device_rate: 0.10
+scoring:
+  current_score_threshold: 0.70
+  margin_threshold: 0.08
+  minimum_coverage: 0.80
+output_root: {tmp_path.as_posix()}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(pipeline_module, "run_static_validation", critical_static)
+    run_dir = run_pipeline(config)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["base_case_severity"] == "critical"
+    assert metrics["base_case_violation_count"] == 1
+    assert metrics["base_case_violations"] == [
+        "transformer overload: trafo 1 at 150.0%"
+    ]
