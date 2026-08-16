@@ -53,17 +53,32 @@ def run_pipeline(config_path: Path) -> Path:
     manifest = build_manifest(config_path, run_dir)
     _write_manifest(manifest, run_dir, [])
 
+    failure_context: dict[str, object] = {}
     try:
         shutil.copyfile(config_path, run_dir / "config.snapshot.yaml")
         artifacts = build_network(config.network)
 
         base_case = run_static_validation(artifacts, config.validation)
         if not base_case.converged:
+            failure_context = {
+                "stage": "base_case_validation",
+                "severity": base_case.severity,
+                "violation_count": len(base_case.violations),
+                "violation_types": list(base_case.violation_types),
+                "violations": list(base_case.violations),
+            }
             raise RuntimeError("base-case power flow did not converge")
         if (
             base_case.severity == "critical"
             and config.validation.terminate_on_critical
         ):
+            failure_context = {
+                "stage": "base_case_validation",
+                "severity": base_case.severity,
+                "violation_count": len(base_case.violations),
+                "violation_types": list(base_case.violation_types),
+                "violations": list(base_case.violations),
+            }
             raise RuntimeError(
                 f"critical base-case violations: {base_case.violations}"
             )
@@ -171,9 +186,11 @@ def run_pipeline(config_path: Path) -> Path:
     except Exception as exc:
         manifest.status = "failed"
         manifest.finished_at_utc = datetime.now(UTC)
-        manifest.failure_summary = {
+        failure_summary: dict[str, object] = {
             "error_type": type(exc).__name__,
             "message": str(exc),
         }
+        failure_summary.update(failure_context)
+        manifest.failure_summary = failure_summary
         _write_manifest(manifest, run_dir, [])
         raise
