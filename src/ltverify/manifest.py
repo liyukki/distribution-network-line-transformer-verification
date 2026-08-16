@@ -210,7 +210,12 @@ def verify_manifest_hashes(manifest: dict[str, object], run_dir: Path) -> None:
         path = Path(run_dir) / text
         if not path.is_file():
             raise ValueError(f"清单产物不是普通文件: {text}")
-        actual = file_sha256(path)
+        try:
+            actual = file_sha256(path)
+        except OSError as exc:
+            raise ValueError(
+                f"读取清单产物哈希失败: {text}"
+            ) from exc
         if actual != expected:
             raise ValueError(
                 f"产物校验失败: {text}（期望 {expected}，实际 {actual}）"

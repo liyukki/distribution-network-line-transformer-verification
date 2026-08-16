@@ -29,10 +29,26 @@ def _run_directory(config_sha256: str) -> Path:
 def _write_manifest(
     manifest: RunManifest, run_dir: Path, output_paths: list[Path]
 ) -> None:
-    manifest.output_paths = [path.name for path in output_paths]
-    manifest.output_sha256 = {
-        path.name: file_sha256(path) for path in output_paths if path.exists()
-    }
+    if not output_paths:
+        raise ValueError("_write_manifest 不允许空输出列表")
+    names: list[str] = []
+    hashes: dict[str, str] = {}
+    for path in output_paths:
+        path = Path(path)
+        if not path.is_file():
+            raise ValueError(f"清单输出不是普通文件: {path.name}")
+        name = path.name
+        if name in names:
+            raise ValueError(f"清单输出 basename 重复: {name}")
+        try:
+            hashes[name] = file_sha256(path)
+        except OSError as exc:
+            raise ValueError(
+                f"读取清单输出哈希失败: {path.name}"
+            ) from exc
+        names.append(name)
+    manifest.output_paths = names
+    manifest.output_sha256 = hashes
     write_json_atomic(
         manifest.model_dump(mode="json"), run_dir / "manifest.json"
     )

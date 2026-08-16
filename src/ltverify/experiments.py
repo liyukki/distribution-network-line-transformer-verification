@@ -485,7 +485,12 @@ def verify_experiment_manifest(
             raise ValueError(
                 f"experiment manifest 声明的文件不是普通文件: {text}"
             )
-        actual = _file_sha256(path)
+        try:
+            actual = _file_sha256(path)
+        except OSError as exc:
+            raise ValueError(
+                f"读取 experiment 产物哈希失败: {text}"
+            ) from exc
         if actual != expected:
             raise ValueError(
                 f"实验产物校验失败: {text}（期望 {expected}，实际 {actual}）"
