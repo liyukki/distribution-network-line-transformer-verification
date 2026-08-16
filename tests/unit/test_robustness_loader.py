@@ -223,6 +223,27 @@ def test_load_rejects_missing_or_blank_family_value(
         load_robustness_artifacts(aggregate_path)
 
 
+def test_load_wraps_verifier_permission_error(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from ltverify import robustness_loader as loader_module
+
+    artifact_dir = _write_current_trio(tmp_path)
+
+    def denied(*args: object, **kwargs: object) -> str:
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(
+        loader_module, "verify_experiment_manifest", denied
+    )
+    with pytest.raises(RobustnessLoadError) as excinfo:
+        load_robustness_artifacts(
+            artifact_dir / "robustness_aggregates.csv",
+            artifact_dir / "robustness_summary.csv",
+        )
+    assert isinstance(excinfo.value.__cause__, PermissionError)
+
+
 @pytest.mark.parametrize("status", [None, "", "   "])
 def test_load_rejects_missing_or_blank_summary_status(
     tmp_path: Path, status: object

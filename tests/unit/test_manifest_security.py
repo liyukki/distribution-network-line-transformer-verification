@@ -45,6 +45,28 @@ def test_verify_experiment_manifest_rejects_directory_output(
         verify_experiment_manifest(manifest, tmp_path)
 
 
+def test_verify_manifest_hashes_wraps_hash_read_permission_error(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from ltverify import manifest as manifest_module
+
+    target = tmp_path / "config.snapshot.yaml"
+    target.write_text("x", encoding="utf-8")
+    manifest = {
+        "output_paths": ["config.snapshot.yaml"],
+        "output_sha256": {"config.snapshot.yaml": "0" * 64},
+        "config_sha256": "0" * 64,
+        "input_paths": ["default.yaml"],
+    }
+
+    def denied(_: Path) -> str:
+        raise PermissionError("denied")
+
+    monkeypatch.setattr(manifest_module, "file_sha256", denied)
+    with pytest.raises(ValueError, match="读取清单产物哈希失败"):
+        verify_manifest_hashes(manifest, tmp_path)
+
+
 def test_coordinated_artifact_and_manifest_hash_is_internal_consistency(
     tmp_path: Path,
 ) -> None:
@@ -56,17 +78,25 @@ def test_coordinated_artifact_and_manifest_hash_is_internal_consistency(
     """
     from ltverify.manifest import file_sha256
 
+    snapshot = tmp_path / "config.snapshot.yaml"
+    snapshot.write_text("key: value\n", encoding="utf-8")
     artifact = tmp_path / "metrics.json"
     artifact.write_text(
         json.dumps({"f1": 0.999999}), encoding="utf-8"
     )
     manifest = {
-        "output_paths": ["metrics.json"],
-        "output_sha256": {"metrics.json": file_sha256(artifact)},
-        "config_sha256": "0" * 64,
+        "output_paths": ["config.snapshot.yaml", "metrics.json"],
+        "output_sha256": {
+            "config.snapshot.yaml": file_sha256(snapshot),
+            "metrics.json": file_sha256(artifact),
+        },
+        "config_sha256": file_sha256(snapshot),
         "input_paths": ["default.yaml"],
     }
-    # The manifest does not contain config.snapshot.yaml, so verify would
-    # fail for schema reasons; this test only asserts the file hash matches
-    # after coordinated modification at the file-hash layer.
-    assert manifest["output_sha256"]["metrics.json"] == file_sha256(artifact)
+    # Coordinated rewrite of artifact + manifest hash is internally
+    # consistent; this is exactly why checksums are not authenticity.
+    artifact.write_text(
+        json.dumps({"f1": 0.999999}), encoding="utf-8"
+    )
+    manifest["output_sha256"]["metrics.json"] = file_sha256(artifact)
+    verify_manifest_hashes(manifest, tmp_path)

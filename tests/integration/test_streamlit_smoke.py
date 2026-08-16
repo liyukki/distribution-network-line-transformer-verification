@@ -72,6 +72,42 @@ def test_streamlit_rejects_non_object_manifest(monkeypatch) -> None:
     assert len(app_test.error) >= 1
 
 
+def test_streamlit_rejects_semantically_invalid_metrics(
+    monkeypatch,
+) -> None:
+    run_dir = run_pipeline(Path("tests/fixtures/small_config.yaml"))
+    (run_dir / "metrics.json").write_text(
+        json.dumps({"f1": "not-a-number", "n_predicted": []}),
+        encoding="utf-8",
+    )
+    _update_manifest_hash(run_dir, "metrics.json")
+    monkeypatch.setenv("LTVERIFY_RUN_DIR", str(run_dir.resolve()))
+    app_test = AppTest.from_file(
+        ROOT / "app" / "streamlit_app.py", default_timeout=120
+    )
+    app_test.run()
+    assert len(app_test.exception) == 0
+    assert len(app_test.error) >= 1
+
+
+def test_streamlit_rejects_missing_prediction_column(monkeypatch) -> None:
+    import pandas as pd
+
+    run_dir = run_pipeline(Path("tests/fixtures/small_config.yaml"))
+    predictions = pd.read_parquet(run_dir / "predictions.parquet")
+    predictions.drop(columns=["decision"]).to_parquet(
+        run_dir / "predictions.parquet"
+    )
+    _update_manifest_hash(run_dir, "predictions.parquet")
+    monkeypatch.setenv("LTVERIFY_RUN_DIR", str(run_dir.resolve()))
+    app_test = AppTest.from_file(
+        ROOT / "app" / "streamlit_app.py", default_timeout=120
+    )
+    app_test.run()
+    assert len(app_test.exception) == 0
+    assert len(app_test.error) >= 1
+
+
 def test_streamlit_rejects_malformed_metrics_after_hash_update(
     monkeypatch,
 ) -> None:
@@ -112,6 +148,33 @@ def test_streamlit_auto_discovery_skips_failed_run(
     app_test.run()
     assert len(app_test.exception) == 0
     assert Path(app_test.text_input[0].value).resolve() == old_run.resolve()
+
+
+def test_streamlit_rerun_revalidates_after_artifact_change(
+    monkeypatch,
+) -> None:
+    run_dir = run_pipeline(Path("tests/fixtures/small_config.yaml"))
+    monkeypatch.setenv("LTVERIFY_RUN_DIR", str(run_dir.resolve()))
+    app_test = AppTest.from_file(
+        ROOT / "app" / "streamlit_app.py", default_timeout=120
+    )
+    app_test.run()
+    assert len(app_test.exception) == 0
+    assert len(app_test.error) == 0
+
+    (run_dir / "metrics.json").write_text(
+        json.dumps({"f1": 0.999999, "n_predicted": 999999}),
+        encoding="utf-8",
+    )
+    app_test.run()
+    assert len(app_test.exception) == 0
+    assert len(app_test.error) >= 1
+    page_text = " ".join(
+        [element.value for element in app_test.markdown]
+        + [element.value for element in app_test.metric]
+    )
+    assert "999999" not in page_text
+    assert "0.999999" not in page_text
 
 
 def test_streamlit_explicit_bad_dir_is_not_replaced(

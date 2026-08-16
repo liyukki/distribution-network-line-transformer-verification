@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from ltverify.data_access import (
+    DASHBOARD_ARTIFACT_FILES,
     ArtifactLoadError,
     discover_completed_run_dir,
     load_run_artifacts,
@@ -166,6 +167,102 @@ def test_load_run_artifacts_rejects_non_completed_status(tmp_path: Path) -> None
         load_run_artifacts(run_dir)
 
 
+@pytest.mark.parametrize("omitted_name", list(DASHBOARD_ARTIFACT_FILES.values()))
+def test_load_run_artifacts_rejects_omitted_dashboard_declaration(
+    tmp_path: Path, monkeypatch, omitted_name: str
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    manifest_path = run_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["output_paths"].remove(omitted_name)
+    manifest["output_sha256"].pop(omitted_name, None)
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (run_dir / omitted_name).write_bytes(b"forged")
+
+    def fail_if_parsed(*args: object, **kwargs: object) -> object:
+        raise AssertionError("解析器不得在声明校验前执行")
+
+    monkeypatch.setattr("ltverify.data_access._read_frame", fail_if_parsed)
+    with pytest.raises(ArtifactLoadError, match="未声明首页必需产物"):
+        load_run_artifacts(run_dir)
+
+
+def test_load_run_artifacts_allows_extra_declared_artifacts(
+    tmp_path: Path,
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    extra = run_dir / "extra.txt"
+    extra.write_text("extra", encoding="utf-8")
+    manifest_path = run_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["output_paths"].append("extra.txt")
+    manifest["output_sha256"]["extra.txt"] = file_sha256(extra)
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    artifacts = load_run_artifacts(run_dir)
+    assert artifacts.manifest["output_paths"][-1] == "extra.txt"
+
+
+def test_load_run_artifacts_rejects_semantically_invalid_metrics(
+    tmp_path: Path,
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    (run_dir / "metrics.json").write_text(
+        json.dumps({"f1": "not-a-number", "n_predicted": []}),
+        encoding="utf-8",
+    )
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(ArtifactLoadError, match="n_predicted|f1"):
+        load_run_artifacts(run_dir)
+
+
+def test_load_run_artifacts_rejects_missing_prediction_columns(
+    tmp_path: Path,
+) -> None:
+    import pandas as pd
+
+    run_dir = _fixture_run(tmp_path)
+    predictions = pd.read_parquet(run_dir / "predictions.parquet")
+    predictions.drop(columns=["decision"]).to_parquet(
+        run_dir / "predictions.parquet"
+    )
+    _update_manifest_hash(run_dir, "predictions.parquet")
+    with pytest.raises(ArtifactLoadError, match="predictions.parquet|decision"):
+        load_run_artifacts(run_dir)
+
+
+def test_load_run_artifacts_wraps_verifier_permission_error(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+
+    def denied(*args: object, **kwargs: object) -> None:
+        raise PermissionError("denied")
+
+    monkeypatch.setattr("ltverify.data_access.verify_manifest_hashes", denied)
+    with pytest.raises(ArtifactLoadError) as excinfo:
+        load_run_artifacts(run_dir)
+    assert isinstance(excinfo.value.__cause__, PermissionError)
+
+
+def test_load_run_artifacts_preserves_parser_assertion_error(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+
+    def bad_parser(*args: object, **kwargs: object) -> object:
+        raise AssertionError("programmer bug")
+
+    monkeypatch.setattr("ltverify.data_access.pd.read_csv", bad_parser)
+    with pytest.raises(AssertionError, match="programmer bug"):
+        load_run_artifacts(run_dir)
+
+
 def test_discover_completed_run_dir_skips_failed_and_incomplete(
     tmp_path: Path,
 ) -> None:
@@ -190,6 +287,65 @@ def test_discover_completed_run_dir_skips_failed_and_incomplete(
     fake_file = runs_root / "run-20260816T200000-file"
     fake_file.write_text("not a dir", encoding="utf-8")
     assert Path(discover_completed_run_dir(runs_root)).resolve() == old.resolve()
+
+
+def test_discover_completed_run_dir_skips_incomplete_new_completed(
+    tmp_path: Path,
+) -> None:
+    source = _fixture_run(tmp_path)
+    runs_root = tmp_path / "runs"
+    runs_root.mkdir(exist_ok=True)
+    old = runs_root / "run-20260816T000000-complete"
+    shutil.copytree(source, old)
+    incomplete = runs_root / "run-20260816T999999-incomplete"
+    incomplete.mkdir()
+    (incomplete / "manifest.json").write_text(
+        json.dumps(
+            {
+                "artifact_schema_version": 2,
+                "status": "completed",
+                "output_paths": ["metrics.json", "config.snapshot.yaml"],
+                "output_sha256": {"metrics.json": "0" * 64, "config.snapshot.yaml": "0" * 64},
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert Path(discover_completed_run_dir(runs_root)).resolve() == old.resolve()
+
+
+def test_discover_completed_run_dir_skips_missing_required_file(
+    tmp_path: Path,
+) -> None:
+    source = _fixture_run(tmp_path)
+    runs_root = tmp_path / "runs"
+    runs_root.mkdir(exist_ok=True)
+    old = runs_root / "run-20260816T000000-complete"
+    shutil.copytree(source, old)
+    broken = runs_root / "run-20260816T999999-broken"
+    shutil.copytree(source, broken)
+    (broken / "predictions.parquet").unlink()
+    manifest_path = broken / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    # Keep the declaration, but the file is missing; discovery must skip.
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    assert Path(discover_completed_run_dir(runs_root)).resolve() == old.resolve()
+
+
+def test_discover_completed_run_dir_selects_structurally_complete_but_tampered(
+    tmp_path: Path,
+) -> None:
+    source = _fixture_run(tmp_path)
+    runs_root = tmp_path / "runs"
+    runs_root.mkdir(exist_ok=True)
+    tampered = runs_root / "run-20260816T999999-tampered"
+    shutil.copytree(source, tampered)
+    (tampered / "metrics.json").write_text(
+        json.dumps({"f1": 0.999999}), encoding="utf-8"
+    )
+    assert Path(discover_completed_run_dir(runs_root)).resolve() == tampered.resolve()
 
 
 def test_discover_completed_run_dir_returns_empty_when_none(

@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from ltverify.manifest import verify_manifest_hashes
-from ltverify.pipeline import run_pipeline
+from ltverify.pipeline import _write_manifest, run_pipeline
 from ltverify.simulation import SimulationResult
 
 EXPECTED_ARTIFACTS = [
@@ -370,6 +370,41 @@ def test_later_exception_after_base_case_writes_self_verifying_failed_manifest(
     assert failure["error_type"] == "RuntimeError"
     assert failure["message"] == "probe"
     assert "stage" not in failure
+
+
+def test_write_manifest_rejects_missing_file(tmp_path: Path) -> None:
+    from ltverify.manifest import build_manifest
+
+    config = _write_temp_config(tmp_path, "write.yaml")
+    manifest = build_manifest(config, tmp_path)
+    with pytest.raises(ValueError, match="不是普通文件"):
+        _write_manifest(manifest, tmp_path, [tmp_path / "missing.txt"])
+
+
+def test_write_manifest_rejects_directory(tmp_path: Path) -> None:
+    from ltverify.manifest import build_manifest
+
+    config = _write_temp_config(tmp_path, "write.yaml")
+    manifest = build_manifest(config, tmp_path)
+    directory = tmp_path / "adir"
+    directory.mkdir()
+    with pytest.raises(ValueError, match="不是普通文件"):
+        _write_manifest(manifest, tmp_path, [directory])
+
+
+def test_write_manifest_writes_consistent_declared_hashes(
+    tmp_path: Path,
+) -> None:
+    from ltverify.manifest import build_manifest
+
+    config = _write_temp_config(tmp_path, "write.yaml")
+    manifest = build_manifest(config, tmp_path)
+    artifact = tmp_path / "artifact.txt"
+    artifact.write_text("data", encoding="utf-8")
+    _write_manifest(manifest, tmp_path, [artifact])
+    written = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert written["output_paths"] == ["artifact.txt"]
+    assert set(written["output_sha256"]) == {"artifact.txt"}
 
 
 @pytest.mark.parametrize(
