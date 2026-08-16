@@ -2,8 +2,10 @@
 
 This is the only module allowed to merge the physical truth into
 predictions. Detection metrics use precision/recall/F1/PR-AUC (never
-Accuracy as the headline), correction metrics use Top-1/Top-3 over the
-actually-mislinked transformers, and the scenario split keeps whole
+Accuracy as the headline). PR-AUC always consumes the continuous
+anomaly_score, never the binary prediction. Top-k correction rates are
+reported only when strictly more than k legal candidate feeders exist;
+otherwise they are marked not_applicable. The scenario split keeps whole
 scenarios inside a single partition so no time point leaks across sets.
 """
 
@@ -46,36 +48,51 @@ def evaluate_predictions(
     precision, recall, f1, _ = precision_recall_fscore_support(
         actual, predicted, average="binary", zero_division=0
     )
-    pr_auc = average_precision_score(actual.astype(int), predicted.astype(int))
+    if "anomaly_score" not in merged.columns:
+        raise ValueError(
+            "predictions must contain a continuous anomaly_score column"
+        )
+    anomaly_score = merged["anomaly_score"].astype(float)
+    pr_auc = average_precision_score(actual.astype(int), anomaly_score)
     matrix = confusion_matrix(actual, predicted, labels=[False, True])
 
+    candidate_feeders = sorted(
+        candidate_scores["candidate_feeder_id"].unique().tolist()
+    )
+    candidate_count = len(candidate_feeders)
+    topk: dict[str, float | None] = {}
+    topk_applicable: dict[str, bool] = {}
     error_rows = merged[actual]
-    if len(error_rows):
-        top1 = float(
-            (error_rows["recommended_feeder_id"] == error_rows["physical_feeder_id"]).mean()
-        )
-        top3_hits = 0
-        for transformer_id in error_rows["transformer_id"]:
-            scores = candidate_scores[
-                candidate_scores["transformer_id"] == transformer_id
-            ].sort_values("enhanced_score", ascending=False)
-            physical = truth.loc[
-                truth["transformer_id"] == transformer_id, "physical_feeder_id"
-            ].iloc[0]
-            if physical in scores["candidate_feeder_id"].head(3).tolist():
-                top3_hits += 1
-        top3 = top3_hits / len(error_rows)
-    else:
-        top1 = float("nan")
-        top3 = float("nan")
+    for k in (1, 2, 3):
+        applicable = candidate_count > k
+        topk_applicable[f"top{k}"] = applicable
+        if not applicable:
+            topk[f"top{k}_correction_rate"] = None
+            continue
+        if len(error_rows):
+            hits = 0
+            for transformer_id in error_rows["transformer_id"]:
+                scores = candidate_scores[
+                    candidate_scores["transformer_id"] == transformer_id
+                ].sort_values("enhanced_score", ascending=False)
+                physical = truth.loc[
+                    truth["transformer_id"] == transformer_id,
+                    "physical_feeder_id",
+                ].iloc[0]
+                if physical in scores["candidate_feeder_id"].head(k).tolist():
+                    hits += 1
+            topk[f"top{k}_correction_rate"] = hits / len(error_rows)
+        else:
+            topk[f"top{k}_correction_rate"] = float("nan")
 
-    metrics: dict[str, float | int] = {
+    metrics: dict[str, float | int | None] = {
         "precision": float(precision),
         "recall": float(recall),
         "f1": float(f1),
         "pr_auc": float(pr_auc),
-        "top1_correction_rate": top1,
-        "top3_correction_rate": top3,
+        **topk,
+        "topk_applicable": topk_applicable,
+        "candidate_feeder_count": candidate_count,
         "n_total": len(merged),
         "n_actual_errors": int(actual.sum()),
         "n_predicted": int(predicted.sum()),
@@ -84,6 +101,9 @@ def evaluate_predictions(
         ),
         "insufficient_data_rate": float(
             (merged["decision"] == "insufficient_data").mean()
+        ),
+        "scored_coverage": float(
+            (merged["decision"] != "insufficient_data").mean()
         ),
     }
     labeled = merged.copy()

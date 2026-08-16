@@ -17,6 +17,7 @@ def evaluation_fixture() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.D
             "predicted_is_mislinked": [True, True, True],
             "confidence": [0.9, 0.8, 0.8],
             "decision": ["automatic_recommendation"] * 3,
+            "anomaly_score": [0.9, 0.8, 0.7],
         }
     )
     truth = pd.DataFrame(
@@ -48,7 +49,10 @@ def test_evaluation_computes_detection_and_correction_metrics() -> None:
     assert result.metrics["recall"] == pytest.approx(1.0)
     assert result.metrics["f1"] == pytest.approx(0.8)
     assert result.metrics["top1_correction_rate"] == pytest.approx(0.5)
-    assert result.metrics["top3_correction_rate"] == pytest.approx(1.0)
+    assert result.metrics["top2_correction_rate"] == pytest.approx(1.0)
+    assert result.metrics["top3_correction_rate"] is None
+    assert result.metrics["candidate_feeder_count"] == 3
+    assert result.metrics["topk_applicable"]["top3"] is False
     assert result.confusion_matrix.shape == (2, 2)
 
 

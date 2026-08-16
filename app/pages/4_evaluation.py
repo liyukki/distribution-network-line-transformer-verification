@@ -40,7 +40,7 @@ if st.session_state.get("demo_mode"):
     y_true = (
         merged["reported_feeder_id"] != merged["physical_feeder_id"]
     ).astype(int)
-    scores = merged["confidence"].fillna(0.0).to_numpy(dtype=float)
+    scores = merged["anomaly_score"].fillna(0.0).to_numpy(dtype=float)
     precision, recall, _ = precision_recall_curve(y_true, scores)
     st.plotly_chart(
         pr_curve_figure(precision.tolist(), recall.tolist()),

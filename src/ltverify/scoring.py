@@ -48,6 +48,7 @@ PREDICTION_COLUMNS = [
     "predicted_is_mislinked",
     "confidence",
     "decision",
+    "anomaly_score",
 ]
 
 
@@ -177,4 +178,13 @@ def diagnose(
                 "decision": decision,
             }
         )
-    return pd.DataFrame(rows, columns=PREDICTION_COLUMNS)
+    frame = pd.DataFrame(rows, columns=PREDICTION_COLUMNS)
+    frame["anomaly_score"] = 0.0
+    scored_mask = frame["decision"] != "insufficient_data"
+    frame.loc[scored_mask, "anomaly_score"] = frame.loc[
+        scored_mask, "coverage"
+    ] * np.minimum(
+        1.0 - frame.loc[scored_mask, "current_score"],
+        np.maximum(frame.loc[scored_mask, "margin"], 0.0),
+    )
+    return frame
