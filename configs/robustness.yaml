@@ -1,4 +1,4 @@
-base_config: configs/default.yaml
+base_config: default.yaml
 experiments:
   ledger_error_rate: [0.05, 0.10, 0.20, 0.30]
   voltage_noise_std_pu: [0.0, 0.0005, 0.001, 0.002]
