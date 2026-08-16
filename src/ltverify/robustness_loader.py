@@ -111,17 +111,22 @@ def _normalize_aggregates(frame: pd.DataFrame) -> pd.DataFrame:
     return normalized
 
 
-def _validate_summary(frame: pd.DataFrame) -> None:
+def _normalize_summary(frame: pd.DataFrame) -> pd.DataFrame:
     if "status" not in frame.columns:
         raise RobustnessLoadError("案例明细 CSV 缺少 status 列")
-    unknown = sorted(
-        set(frame["status"].dropna().astype(str).unique())
-        - {"completed", "failed"}
-    )
+    if frame["status"].isna().any():
+        raise RobustnessLoadError("案例明细 CSV 的 status 列含缺失值")
+    status = frame["status"].astype(str).str.strip()
+    if status.eq("").any():
+        raise RobustnessLoadError("案例明细 CSV 的 status 列含空白值")
+    unknown = sorted(set(status) - {"completed", "failed"})
     if unknown:
         raise RobustnessLoadError(
             f"案例明细 CSV 含未知状态: {unknown}"
         )
+    normalized = frame.copy()
+    normalized["status"] = status.to_numpy()
+    return normalized
 
 
 def load_robustness_artifacts(
@@ -186,7 +191,7 @@ def _load_current(
     if not manifest_path.is_file():
         raise RobustnessLoadError(
             f"当前命名产物缺少 {CURRENT_MANIFEST_NAME}，"
-            "无法验签；请使用旧命名或重新生成实验"
+            "无法进行哈希一致性校验；请使用旧命名或重新生成实验"
         )
     try:
         manifest = read_json(manifest_path)
@@ -215,14 +220,13 @@ def _load_current(
         )
     except (ValueError, TypeError) as exc:
         raise RobustnessLoadError(
-            f"实验产物验签失败: {exc}"
+            f"实验产物哈希一致性校验失败: {exc}"
         ) from exc
 
     aggregates = _normalize_aggregates(_read_csv_safely(aggregates_path))
     summary: pd.DataFrame | None = None
     if effective_summary.exists():
-        summary = _read_csv_safely(effective_summary)
-        _validate_summary(summary)
+        summary = _normalize_summary(_read_csv_safely(effective_summary))
 
     strict_message = ""
     if experiment_config_path is not None and base_config_path is not None:
@@ -271,11 +275,10 @@ def _load_legacy(
     aggregates = _normalize_aggregates(_read_csv_safely(aggregates_path))
     summary: pd.DataFrame | None = None
     if resolved_summary is not None:
-        summary = _read_csv_safely(resolved_summary)
-        _validate_summary(summary)
+        summary = _normalize_summary(_read_csv_safely(resolved_summary))
     return RobustnessArtifacts(
         aggregates,
         summary,
         "legacy_unverified",
-        "旧命名实验产物未经验签，仅供兼容展示",
+        "旧命名实验产物未经过哈希一致性校验，仅供兼容展示",
     )
