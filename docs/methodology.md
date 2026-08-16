@@ -33,10 +33,22 @@ anomaly_score = coverage × min(1 − current_score, max(margin, 0))。该公式
 ## 评价指标
 
 - Precision = TP/(TP+FP)，Recall = TP/(TP+FN)，F1 为调和平均；类别不平衡场景不以 Accuracy 为主指标。
-- pr_auc：全样本主指标，用连续 anomaly_score 计算 AP；insufficient_data 样本以 0.0 参与——系统无法对真实错误评分时，整体运行效果应受到惩罚。
-- pr_auc_scored：仅在 decision != insufficient_data 的子集上计算的诊断指标；子集为空或不含两类时输出 null，必须与 scored_coverage 同时解读，不得替代全样本 pr_auc。
-- Top-1/Top-2 修正率：仅在真实错误样本上统计；候选进入排名须同时满足 enhanced_score 有限、available_feature_weight 有限且不低于证据门槛；每个设备对每个 k 单独计算有效候选数，有效候选少于 k 时该设备不可评价、不计入分子分母；同时报告 top{k}_evaluated_count 与 top{k}_evaluation_coverage。三馈线下 Top-3 不适用。排名同分时按 candidate_feeder_id 升序作确定性次序，不依赖 DataFrame 行顺序。
+- pr_auc：全样本主指标，用连续 anomaly_score 计算 AP；insufficient_data 样本以 0.0 参与——系统无法对真实错误评分时，整体运行效果应受到惩罚。适用条件：y_true 必须同时包含正负两类；单类别真值时为 null 并给出 pr_auc_unavailable_reason（single_class_all_negative / single_class_all_positive），绝不写成 0 冒充可比较数值。
+- pr_auc_scored：仅在 decision != insufficient_data 的子集上计算的诊断指标；子集为空或不含两类时输出 null（pr_auc_scored_unavailable_reason），必须与 scored_coverage 同时解读，不得替代全样本 pr_auc。
+- Top-1/Top-2 修正率：仅在真实错误样本上统计；候选进入排名须同时满足 enhanced_score 与 available_feature_weight 均为有限数值（NaN 与正负无穷一律排除）且权重不低于证据门槛；被排除的候选数量计入 excluded_candidate_count。每个设备对每个 k 单独计算有效候选数，有效候选少于 k 时该设备不可评价、不计入分子分母；同时报告 top{k}_evaluated_count 与 top{k}_evaluation_coverage。三馈线下 Top-3 不适用。排名同分时按 candidate_feeder_id 升序作确定性次序，不依赖 DataFrame 行顺序。
 - 机会基线：三候选均匀随机排序下 Top-1/Top-2 期望约 1/3 与 2/3；默认场景 n=5 过小，不能作显著性结论。
+
+## 物理校验策略
+
+- 潮流不收敛始终是硬失败（fatal），不受 critical_violation_types 配置影响。
+- 已求解网络的工程越限（电压越限、变压器过载、功率平衡误差超容差）按 critical_violation_types 分类为 critical/warning；默认配置包含全部四类，即默认策略为零容忍，任何违规都使流水线与实验案例失败（terminate_on_critical=true）；用户可显式降级其中某些类型为 warning，降级后仍会记录违规计数。
+- 基础工况（base-case）与时序工况使用同一套严重等级分类函数；未知的 critical_violation_types 在配置加载阶段即失败，重复类型被去重。
+
+## 证据链
+
+- 运行清单 schema 2：output_paths 与 output_sha256 严格一一对应，只允许相对安全路径，哈希必须为 64 位十六进制；config.snapshot.yaml 的哈希必须等于 manifest.config_sha256，报告生成前执行全量校验，篡改任一产物（含配置快照）都会拒绝生成。
+- 实验清单同时固定实验矩阵配置（experiment_config_sha256/snapshot）与基础业务配置（base_config_sha256/snapshot），并记录全部输出文件哈希。
+- default_summary.json 不含本机绝对路径，包含 source_manifest_sha256、时间序列物理汇总与关键产物哈希，可由 python -m ltverify report 完全复现。
 
 ## 数据划分与泄漏防护
 
