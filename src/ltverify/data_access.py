@@ -23,7 +23,7 @@ class RunArtifacts:
     feeder_measurements: pd.DataFrame
     candidate_features: pd.DataFrame
     predictions: pd.DataFrame
-    metrics: dict[str, float | int]
+    metrics: dict[str, object]
     confusion_matrix: pd.DataFrame
     network_nodes: pd.DataFrame
     network_edges: pd.DataFrame
