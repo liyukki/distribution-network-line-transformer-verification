@@ -30,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="reports/metrics/default_summary.json",
         help="输出 JSON 路径",
     )
+    report.add_argument(
+        "--manifest-output",
+        default=None,
+        help="源清单副本输出路径；默认使用 <输出文件名>.manifest.json",
+    )
     return parser
 
 
@@ -39,8 +44,15 @@ def main(argv: list[str] | None = None) -> int:
         from ltverify.report import generate_default_summary
 
         try:
+            manifest_output = (
+                Path(args.manifest_output)
+                if args.manifest_output
+                else None
+            )
             output = generate_default_summary(
-                Path(args.run_dir), Path(args.output)
+                Path(args.run_dir),
+                Path(args.output),
+                manifest_output=manifest_output,
             )
         except Exception as exc:  # noqa: BLE001 - CLI top-level boundary
             print(f"report failed: {type(exc).__name__}: {exc}", file=sys.stderr)

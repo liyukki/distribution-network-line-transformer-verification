@@ -102,8 +102,16 @@ def _time_series_validation_summary(run_dir: Path) -> dict[str, object]:
     }
 
 
-def generate_default_summary(run_dir: Path, output_path: Path) -> Path:
-    """Regenerate the default-summary evidence file from run artifacts."""
+def generate_default_summary(
+    run_dir: Path,
+    output_path: Path,
+    manifest_output: Path | None = None,
+) -> Path:
+    """Regenerate the default-summary evidence file from run artifacts.
+
+    The portable source-manifest copy is written to manifest_output when
+    given, otherwise to <output_stem>.manifest.json next to the report.
+    """
     run_dir = Path(run_dir)
     artifacts = load_run_artifacts(run_dir)
     config = load_config(run_dir / "config.snapshot.yaml")
@@ -167,7 +175,11 @@ def generate_default_summary(run_dir: Path, output_path: Path) -> Path:
         ),
     }
     write_json_atomic(summary, output_path)
-    write_json_atomic(
-        artifacts.manifest, output_path.parent / "default_manifest.json"
-    )
+    if manifest_output is None:
+        manifest_target = output_path.with_name(
+            f"{output_path.stem}.manifest.json"
+        )
+    else:
+        manifest_target = Path(manifest_output)
+    write_json_atomic(artifacts.manifest, manifest_target)
     return output_path
