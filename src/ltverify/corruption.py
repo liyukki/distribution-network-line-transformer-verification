@@ -80,8 +80,9 @@ def disturb_measurements(
 
     if cfg.spike_rate > 0:
         spike_count = round(cfg.spike_rate * row_count)
+        missing_set = set(missing_indices.tolist())
         available = np.array(
-            [index for index in range(row_count) if index not in set(missing_indices)]
+            [index for index in range(row_count) if index not in missing_set]
         )
         spike_indices = rng.choice(
             available, size=min(spike_count, len(available)), replace=False

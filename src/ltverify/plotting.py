@@ -3,8 +3,27 @@
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.colors import qualitative
 
 FEEDER_COLORS = {"F01": "#1f77b4", "F02": "#ff7f0e", "F03": "#2ca02c"}
+_NEUTRAL_COLOR = "#cccccc"
+
+
+def feeder_color(feeder_id: object, neutral: bool = False) -> str:
+    """Deterministic color per feeder id; supports more than three feeders.
+
+    In neutral mode every feeder gets the same gray so that the physical
+    topology stays hidden outside demo/evaluation mode.
+    """
+    if neutral:
+        return _NEUTRAL_COLOR
+    key = str(feeder_id)
+    if key in FEEDER_COLORS:
+        return FEEDER_COLORS[key]
+    palette = qualitative.Plotly
+    digits = [character for character in key if character.isdigit()]
+    index = (int("".join(digits)) - 1) % len(palette) if digits else hash(key) % len(palette)
+    return palette[index]
 
 
 def confusion_matrix_figure(matrix: np.ndarray) -> go.Figure:
@@ -61,7 +80,7 @@ def candidate_score_bars_figure(
             x=scores["candidate_feeder_id"],
             y=scores["enhanced_score"],
             marker={"color": [
-                FEEDER_COLORS.get(str(feeder), "#999999")
+                feeder_color(feeder)
                 for feeder in scores["candidate_feeder_id"]
             ]},
         )
@@ -90,8 +109,15 @@ def similarity_heatmap_figure(matrix: pd.DataFrame) -> go.Figure:
     return figure
 
 
-def topology_figure(nodes: pd.DataFrame, edges: pd.DataFrame) -> go.Figure:
-    """Schematic topology on a circle layout, colored by voltage level."""
+def topology_figure(
+    nodes: pd.DataFrame, edges: pd.DataFrame, color_edges_by_feeder: bool = True
+) -> go.Figure:
+    """Schematic topology on a circle layout, colored by voltage level.
+
+    Edge feeder colors reveal the physical topology, so they are only
+    shown in demo/evaluation mode (color_edges_by_feeder=True); otherwise
+    every edge is neutral gray.
+    """
     figure = go.Figure()
     count = len(nodes)
     angles = 2 * np.pi * nodes["node_id"].to_numpy() / max(count, 1)
@@ -102,7 +128,9 @@ def topology_figure(nodes: pd.DataFrame, edges: pd.DataFrame) -> go.Figure:
     for _, edge in edges.iterrows():
         start = positions[edge["from_node"]]
         end = positions[edge["to_node"]]
-        color = FEEDER_COLORS.get(str(edge["feeder_id"]), "#aaaaaa")
+        color = feeder_color(
+            edge["feeder_id"], neutral=not color_edges_by_feeder
+        )
         figure.add_trace(
             go.Scatter(
                 x=[start[0], end[0]],

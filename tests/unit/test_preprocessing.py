@@ -46,6 +46,10 @@ def test_preprocessing_interpolates_short_gap_and_retains_long_gap() -> None:
     assert pd.isna(prepared.voltage_wide.loc[LONG_GAP_MIDDLE, "T002"])
     assert np.nanmax(np.abs(prepared.residual_voltage_wide.median(axis=1))) < 1e-12
     assert "physical_feeder_id" not in prepared.long_form.columns
+    # q_wide belongs to the prepared-data contract (planned reactive-power
+    # extension); it must stay aligned with the other wide frames.
+    assert list(prepared.q_wide.columns) == ["T001", "T002"]
+    assert prepared.q_wide.shape == prepared.voltage_wide.shape
 
 
 def test_duplicate_pairs_raise_domain_error() -> None:

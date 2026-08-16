@@ -63,6 +63,9 @@ def prepare_measurements(
 
     voltage_wide = to_wide("voltage_pu")
     p_wide = to_wide("p_mw")
+    # q_wide is part of the prepared-data contract for the planned
+    # reactive-power extension; it has no consumer in the first release
+    # but is kept (with contract tests) instead of being deleted.
     q_wide = to_wide("q_mvar")
 
     voltage_wide = voltage_wide.interpolate(

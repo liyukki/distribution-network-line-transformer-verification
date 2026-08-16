@@ -93,7 +93,13 @@ def generate_profiles(
     """Generate deterministic load and PV profiles for every transformer."""
     asset_table = artifacts.asset_table
     transformer_ids = asset_table["transformer_id"].tolist()
-    periods = cfg.days * 24 * 60 // cfg.interval_minutes
+    minutes_per_day = 24 * 60
+    if minutes_per_day % cfg.interval_minutes != 0:
+        raise ValueError(
+            "interval_minutes must divide one day exactly (1440 minutes); "
+            f"got {cfg.interval_minutes}"
+        )
+    periods = cfg.days * minutes_per_day // cfg.interval_minutes
     index = pd.date_range(
         start=cfg.start,
         periods=periods,
@@ -122,8 +128,10 @@ def generate_profiles(
         ].iloc[0]
         shape = _SHAPE_BY_TYPE[customer_type](hour)
         shape = shape / shape.max()
+        feeder_count = len(feeder_numbers)
         feeder_factor = 1.0 + _FEEDER_SINUSOID_AMPLITUDE * np.sin(
-            2.0 * np.pi * hour / 24.0 + 2.0 * np.pi * feeder_number / 3.0
+            2.0 * np.pi * hour / 24.0
+            + 2.0 * np.pi * feeder_number / feeder_count
         )
         column_profile = (
             _BASE_LOAD_PEAK_MW

@@ -42,7 +42,4 @@ st.plotly_chart(
 )
 
 quality = device["data_quality_flag"].value_counts().to_dict()
-if quality:
-    st.warning(f"数据质量标记: {quality}")
-else:
-    st.info("该配变量测未发现质量标记。")
+st.warning(f"数据质量标记: {quality}")

@@ -9,11 +9,19 @@ if artifacts is None:
     st.info("请先在主页加载运行目录。")
     st.stop()
 
+demo_mode = bool(st.session_state.get("demo_mode"))
 st.plotly_chart(
-    topology_figure(artifacts.network_nodes, artifacts.network_edges),
+    topology_figure(
+        artifacts.network_nodes,
+        artifacts.network_edges,
+        color_edges_by_feeder=demo_mode,
+    ),
     use_container_width=True,
 )
-st.caption("线条颜色按馈线着色（F01/F02/F03），主变连接为灰色；标记颜色为电压等级。")
+if demo_mode:
+    st.caption("演示评价模式：线条颜色按物理馈线着色；标记颜色为电压等级。")
+else:
+    st.caption("普通模式：线路为中性色，不展示物理馈线归属；标记颜色为电压等级。")
 with st.expander("台账与推荐对照"):
     st.dataframe(artifacts.predictions, use_container_width=True)
     if st.session_state.get("demo_mode"):

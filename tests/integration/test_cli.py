@@ -30,7 +30,7 @@ def test_run_all_prints_absolute_run_directory() -> None:
     assert printed.exists()
 
 
-def test_missing_config_prints_missing_path() -> None:
-    result = _run("simulate", "--config", "no_such_config.yaml")
+def test_stage_commands_are_explicitly_not_implemented() -> None:
+    result = _run("simulate", "--config", "tests/fixtures/small_config.yaml")
     assert result.returncode != 0
-    assert "no_such_config.yaml" in result.stdout
+    assert "尚未实现" in result.stderr
