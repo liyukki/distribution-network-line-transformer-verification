@@ -17,6 +17,38 @@ DATA_PAGES = [
 ]
 
 
+def _artifacts_with_schema(
+    artifacts: RunArtifacts,
+    version: object,
+    *,
+    drop_predictions_columns: tuple[str, ...] = (),
+) -> RunArtifacts:
+    manifest = dict(artifacts.manifest)
+    if version is None:
+        manifest.pop("artifact_schema_version", None)
+    else:
+        manifest["artifact_schema_version"] = version
+    predictions = artifacts.predictions
+    if drop_predictions_columns:
+        predictions = predictions.drop(
+            columns=list(drop_predictions_columns), errors="ignore"
+        )
+    return RunArtifacts(
+        run_dir=artifacts.run_dir,
+        manifest=manifest,
+        truth=artifacts.truth,
+        ledger=artifacts.ledger,
+        observed_measurements=artifacts.observed_measurements,
+        feeder_measurements=artifacts.feeder_measurements,
+        candidate_features=artifacts.candidate_features,
+        predictions=predictions,
+        metrics=dict(artifacts.metrics),
+        confusion_matrix=artifacts.confusion_matrix,
+        network_nodes=artifacts.network_nodes,
+        network_edges=artifacts.network_edges,
+    )
+
+
 @pytest.fixture(scope="module")
 def run_dir() -> Path:
     return run_pipeline(Path("tests/fixtures/small_config.yaml"))
@@ -129,6 +161,38 @@ def test_robustness_page_prefers_new_aggregates_over_legacy(
     raised = [element.value for element in app_test.exception]
     assert len(app_test.exception) == 0, raised
     assert Path(app_test.text_input[0].value).resolve() == new_csv
+
+
+def test_robustness_page_does_not_mix_new_aggregates_with_legacy_summary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    metrics = ["precision", "f1"]
+    aggregates = pd.DataFrame(
+        {
+            "family": ["missing_rate"],
+            "value": ["0.1"],
+            **{f"mean_{metric}": [0.8] for metric in metrics},
+            **{f"std_{metric}": [0.06] for metric in metrics},
+        }
+    )
+    new_dir = tmp_path / "runs" / "experiments-20260816T100000"
+    new_dir.mkdir(parents=True)
+    aggregates.to_csv(new_dir / "robustness_aggregates.csv", index=False)
+
+    legacy_dir = tmp_path / "runs" / "experiments-20260816T090000"
+    legacy_dir.mkdir(parents=True)
+    aggregates.to_csv(legacy_dir / "experiment_aggregates.csv", index=False)
+    aggregates.to_csv(legacy_dir / "experiment_summary.csv", index=False)
+
+    monkeypatch.chdir(tmp_path)
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    assert Path(app_test.text_input[0].value).resolve() == new_dir / "robustness_aggregates.csv"
+    assert app_test.text_input[1].value == ""
 
 
 def test_robustness_page_lists_complete_metrics(tmp_path: Path) -> None:
@@ -245,4 +309,46 @@ def test_legacy_run_page_4_shows_warning_without_crash(
     warnings = [element.value for element in app_test.warning]
     assert any("不兼容" in text for text in warnings)
     # 旧版运行不绘制 PR 曲线：只有混淆矩阵一个图表
+    assert len(app_test.get("plotly_chart")) == 1
+
+
+@pytest.mark.parametrize("version", [2.5, float("inf"), True])
+def test_invalid_schema_page_errors_without_plotly(
+    run_dir: Path, version: object
+) -> None:
+    artifacts = load_run_artifacts(run_dir)
+    target = _artifacts_with_schema(artifacts, version)
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "4_evaluation.py", default_timeout=120
+    )
+    app_test.session_state["artifacts"] = target
+    app_test.session_state["demo_mode"] = True
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    errors = [element.value for element in app_test.error]
+    assert any("非法" in text for text in errors)
+    assert len(app_test.get("plotly_chart")) == 0
+
+
+def test_newer_schema_page_keeps_basic_chart_and_skips_pr(
+    run_dir: Path,
+) -> None:
+    artifacts = load_run_artifacts(run_dir)
+    target = _artifacts_with_schema(
+        artifacts,
+        3,
+        drop_predictions_columns=("anomaly_score", "reported_feeder_id"),
+    )
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "4_evaluation.py", default_timeout=120
+    )
+    app_test.session_state["artifacts"] = target
+    app_test.session_state["demo_mode"] = True
+    app_test.run()
+    raised = [element.value for element in app_test.exception]
+    assert len(app_test.exception) == 0, raised
+    warnings = [element.value for element in app_test.warning]
+    assert any("未验证" in text for text in warnings)
+    # schema 3 只保留基础混淆矩阵图，不绘制依赖当前 schema 的 PR 曲线
     assert len(app_test.get("plotly_chart")) == 1

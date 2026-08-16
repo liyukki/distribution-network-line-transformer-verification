@@ -1,9 +1,16 @@
+import json
 import sys
 from pathlib import Path
 
 import pytest
 
-from ltverify.manifest import build_manifest, verify_manifest_hashes
+from ltverify.manifest import (
+    build_manifest,
+    validate_portable_relative_path,
+    verify_manifest_hashes,
+)
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_manifest_contains_reproduction_fields(tmp_path: Path) -> None:
@@ -45,3 +52,43 @@ def test_manifest_rejects_unsafe_paths_and_bad_hashes(tmp_path: Path) -> None:
     bad_hash = _fake_manifest(["a.csv"], {"a.csv": "not-a-sha256"})
     with pytest.raises(ValueError, match="64 位十六进制"):
         verify_manifest_hashes(bad_hash, tmp_path)
+
+
+def test_build_manifest_input_paths_are_portable(tmp_path: Path) -> None:
+    relative_manifest = build_manifest(Path("configs/default.yaml"), tmp_path)
+    assert relative_manifest.input_paths == ["default.yaml"]
+
+    absolute_manifest = build_manifest(ROOT / "configs/default.yaml", tmp_path)
+    assert absolute_manifest.input_paths == ["default.yaml"]
+    for value in absolute_manifest.input_paths:
+        assert "\\" not in value
+        assert not Path(value).is_absolute()
+
+
+def test_delivered_default_manifest_paths_are_portable() -> None:
+    manifest_path = ROOT / "reports/metrics/default_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for value in manifest["input_paths"] + manifest["output_paths"]:
+        assert "\\" not in value
+        assert not Path(value).is_absolute()
+        validate_portable_relative_path(value, field="delivered_manifest")
+
+
+@pytest.mark.parametrize(
+    "unsafe",
+    [
+        "../evil.csv",
+        "..\\evil.csv",
+        "C:\\evil.csv",
+        "/absolute/evil.csv",
+        "\\\\server\\share\\evil.csv",
+        "a/../../b.csv",
+        "a//b.csv",
+        "a/./b.csv",
+    ],
+)
+def test_validate_portable_relative_path_rejects_cross_platform_unsafe(
+    unsafe: str,
+) -> None:
+    with pytest.raises(ValueError):
+        validate_portable_relative_path(unsafe, field="test")
