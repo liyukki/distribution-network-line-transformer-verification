@@ -48,10 +48,10 @@ anomaly_score = coverage × min(1 − current_score, max(margin, 0))。该公式
 
 ## 证据链
 
-- 运行清单 schema 2：output_paths 与 output_sha256 严格一一对应，只允许相对安全路径，哈希必须为 64 位十六进制；config.snapshot.yaml 的哈希必须等于 manifest.config_sha256。报告生成遵循"先验签、后解析"：只读 manifest.json → schema 判定 → verify_manifest_hashes → 之后才读取配置与数据产物；篡改任一产物（含配置快照）都会在解析前拒绝。running/failed/completed 三类清单在配置快照成功写入后都保留 config.snapshot.yaml 哈希闭环，可通过 verify_manifest_hashes 自验证；配置快照复制失败时不遗留自称 schema-v2 却无法验证的持久化清单。
+- 运行清单 schema 2：output_paths 与 output_sha256 严格一一对应，只允许相对安全路径，哈希必须为 64 位十六进制；config.snapshot.yaml 的哈希必须等于 manifest.config_sha256。报告生成遵循"先做 SHA-256 哈希一致性校验、后解析"：只读 manifest.json → schema 判定 → verify_manifest_hashes → 之后才读取配置与数据产物；未同步更新清单的产物变化会在解析前被拒绝。running/failed/completed 三类清单在配置快照成功写入后都保留 config.snapshot.yaml 哈希闭环，可通过 verify_manifest_hashes 自验证；配置快照复制失败时不遗留自称 schema-v2 却无法验证的持久化清单。当前机制不是数字签名，不能抵抗“产物与同目录清单一起被改写”的协同篡改。
 - 路径契约：清单中只保存可移植的逻辑文件名/相对路径（无盘符、反斜杠、UNC 与 `..` 穿越），实际运行时 Path 只在进程内使用；配置身份由快照和 SHA-256 共同保证。`build_manifest` 的 `input_paths` 只记录配置文件名（如 `default.yaml`），不泄露本机原始位置。
 - 鲁棒性产物权威命名：robustness_summary.csv、robustness_aggregates.csv、robustness_experiment_manifest.json；实验清单（verify_experiment_manifest 校验）同时固定实验矩阵配置（experiment_config_name/sha256/snapshot）与基础业务配置（base_config_name/sha256/snapshot），并记录全部输出文件哈希；base_config 相对路径以实验 YAML 所在目录解析，清单内所有路径可移植（无盘符/反斜杠）。实验清单验证分两级：严格模式要求同时提供两份源配置并核验 name/hash/snapshot；离线模式只验证 schema、输出哈希、计数和字段格式，不能证明快照来自原始 YAML。
-- 鲁棒性看板安全边界：当前 robustness_* 产物展示前先对 sibling manifest 验签；`strict_verified` 只适用于实际读取的精确 canonical 文件（robustness_aggregates.csv + robustness_summary.csv），同目录其他 robustness_* 文件不会继承信任；旧 experiment_* 仅接受精确旧文件名并标记未验证；坏 CSV、缺列、目录路径、非对象 manifest、混合空值 family 或非法数值转为页面错误提示，不产生未捕获异常。
+- 鲁棒性看板安全边界：当前 robustness_* 产物展示前先对 sibling manifest 做哈希一致性校验；`strict_verified` 只适用于实际读取的精确 canonical 文件（robustness_aggregates.csv + robustness_summary.csv），同目录其他 robustness_* 文件不会继承信任；旧 experiment_* 仅接受精确旧文件名并标记未验证；坏 CSV、缺列、目录路径、非对象 manifest、混合空值 family 或非法数值转为页面错误提示，不产生未捕获异常。`strict_verified` 表示产物与清单内部一致且指定源配置完成 name/hash/snapshot 交叉核验，不表示数字签名或来源真实性证明。
 - report 命令在写入前拒绝输出与清单输出路径相同、或覆盖源运行目录产物的情况；清单版本非法/旧版/未来版均明确拒绝或提示。
 - default_summary.json 不含本机绝对路径，包含 source_manifest_sha256、时间序列物理汇总与关键产物哈希，可由 python -m ltverify report 完全复现。
 
