@@ -1,8 +1,6 @@
 import json
 from pathlib import Path
 
-import pytest
-
 from ltverify.experiments import verify_experiment_manifest
 from ltverify.manifest import classify_artifact_schema_version
 
@@ -21,7 +19,7 @@ def test_delivered_robustness_manifest_is_self_verifying() -> None:
 
 
 def test_classify_schema_states() -> None:
-    assert classify_artifact_schema_version(None) == ("legacy", None)
+    assert classify_artifact_schema_version(None) == ("invalid", None)
     assert classify_artifact_schema_version(1) == ("legacy", 1)
     assert classify_artifact_schema_version(2) == ("current", 2)
     assert classify_artifact_schema_version(3) == ("newer", 3)

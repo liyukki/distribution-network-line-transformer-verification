@@ -62,6 +62,27 @@ def file_sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+SchemaState = Literal["legacy", "current", "newer", "invalid"]
+
+
+def classify_artifact_schema_version(
+    raw: object,
+) -> tuple[SchemaState, int | None]:
+    """Strict schema version classification.
+
+    Only plain integers are accepted (bool is rejected); floats, inf,
+    NaN, strings, lists and None are invalid. < 2 is legacy, == 2 is
+    current, > 2 is newer/unsupported.
+    """
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        return ("invalid", None)
+    if raw < 2:
+        return ("legacy", raw)
+    if raw == 2:
+        return ("current", raw)
+    return ("newer", raw)
+
+
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 

@@ -11,17 +11,13 @@ if artifacts is None:
     st.info("请先在主页加载运行目录。")
     st.stop()
 
-raw_version = artifacts.manifest.get("artifact_schema_version")
-try:
-    schema_version = int(raw_version)
-except (TypeError, ValueError):
-    schema_version = None
-if schema_version is None or schema_version < 2:
+from ltverify.manifest import classify_artifact_schema_version
+
+schema_state, schema_version = classify_artifact_schema_version(
+    artifacts.manifest.get("artifact_schema_version")
+)
+if "artifact_schema_version" not in artifacts.manifest:
     schema_state = "legacy"
-elif schema_version == 2:
-    schema_state = "current"
-else:
-    schema_state = "newer"
 
 if schema_state == "legacy":
     st.warning(
@@ -32,8 +28,14 @@ if schema_state == "legacy":
 elif schema_state == "newer":
     st.warning(
         f"该运行目录使用未验证的 schema 版本 {schema_version}；"
-        "仅展示已验证的有限字段。"
+        "仅展示已验证的有限字段，不执行依赖 schema-v2 的派生计算。"
     )
+elif schema_state == "invalid":
+    st.error(
+        f"运行目录清单版本非法: "
+        f"{artifacts.manifest.get('artifact_schema_version')!r}，无法可靠展示。"
+    )
+    st.stop()
 
 st.plotly_chart(
     confusion_matrix_figure(artifacts.confusion_matrix.to_numpy()),
@@ -68,8 +70,21 @@ st.caption(
 )
 
 if st.session_state.get("demo_mode"):
-    if schema_state == "legacy" or "anomaly_score" not in artifacts.predictions.columns:
-        st.info("旧版运行目录不绘制 PR 曲线。")
+    required_pr_columns = {
+        "transformer_id",
+        "reported_feeder_id",
+        "physical_feeder_id",
+        "anomaly_score",
+    }
+    pr_supported = (
+        schema_state == "current"
+        and "anomaly_score" in artifacts.predictions.columns
+        and required_pr_columns
+        <= set(artifacts.predictions.columns)
+        | set(artifacts.truth.columns)
+    )
+    if not pr_supported:
+        st.info("该运行目录不绘制 PR 曲线（旧版或未验证的 schema）。")
     else:
         truth = artifacts.truth.set_index("transformer_id")
         merged = artifacts.predictions.join(truth, on="transformer_id")
