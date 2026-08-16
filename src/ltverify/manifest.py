@@ -85,14 +85,28 @@ def classify_artifact_schema_version(
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
+_WINDOWS_RESERVED_NAMES = frozenset(
+    {
+        "CON",
+        "PRN",
+        "AUX",
+        "NUL",
+        *(f"COM{index}" for index in range(1, 10)),
+        *(f"LPT{index}" for index in range(1, 10)),
+    }
+)
+_FORBIDDEN_FILENAME_CHARS = set('<>:"|?*')
+
 
 def validate_portable_relative_path(value: object, *, field: str) -> str:
     """Validate a portable, OS-independent relative artifact path.
 
     The same contract is used for run manifests and experiment manifests:
-    no backslashes, drive letters, UNC/absolute paths, empty segments, or
-    path traversal. This is intentionally based on POSIX path semantics so
-    Windows-style separators cannot bypass the check on a POSIX host.
+    no backslashes, drive letters, UNC/absolute paths, empty segments,
+    path traversal, Windows reserved device names, forbidden filename
+    characters, or trailing dots/spaces. This is intentionally based on
+    POSIX path semantics so Windows-style separators cannot bypass the
+    check on a POSIX host.
     """
     if not isinstance(value, str) or not value:
         raise ValueError(f"{field} 路径必须是非空字符串")
@@ -105,21 +119,55 @@ def validate_portable_relative_path(value: object, *, field: str) -> str:
         raise ValueError(f"{field} 路径禁止反斜杠/绝对路径: {text!r}")
     if PurePosixPath(text).is_absolute():
         raise ValueError(f"{field} 路径禁止绝对路径: {text!r}")
-    if any(part in ("", ".", "..") for part in text.split("/")):
-        raise ValueError(
-            f"{field} 路径禁止空段、点段或路径穿越: {text!r}"
-        )
+    for part in text.split("/"):
+        if part in ("", ".", ".."):
+            raise ValueError(
+                f"{field} 路径禁止空段、点段或路径穿越: {text!r}"
+            )
+        if any(ord(char) < 32 or char in _FORBIDDEN_FILENAME_CHARS for char in part):
+            raise ValueError(
+                f"{field} 路径包含非法字符: {text!r}"
+            )
+        if part != part.rstrip(" ."):
+            raise ValueError(
+                f"{field} 路径禁止尾随点或空格: {text!r}"
+            )
+        stem = part.split(".", 1)[0].upper()
+        if stem in _WINDOWS_RESERVED_NAMES:
+            raise ValueError(
+                f"{field} 路径包含 Windows 保留设备名: {text!r}"
+            )
     return text
 
 
 def verify_manifest_hashes(manifest: dict[str, object], run_dir: Path) -> None:
     """Verify a schema-v2 manifest against the run directory.
 
-    Enforces: no duplicate output paths; output_paths and output_sha256
-    keys match exactly; every path is a safe relative name; every hash is
-    a 64-hex SHA-256; every file exists and matches; and the config
-    snapshot hash chain (config.snapshot.yaml == config_sha256) holds.
+    Enforces: input_paths exists and is a non-empty list of portable
+    relative names; no duplicate output paths; output_paths and
+    output_sha256 keys match exactly; every path is a safe relative name;
+    every hash is a 64-hex SHA-256; every file exists and matches; and the
+    config snapshot hash chain (config.snapshot.yaml == config_sha256)
+    holds.
     """
+    input_paths = manifest.get("input_paths")
+    if input_paths is None:
+        raise ValueError("input_paths 字段缺失")
+    if not isinstance(input_paths, list):
+        raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
+            "input_paths 必须是 list[str]"
+        )
+    if not input_paths:
+        raise ValueError("input_paths 不能为空列表")
+    if len(input_paths) != len(set(input_paths)):
+        raise ValueError("input_paths 存在重复项")
+    for name in input_paths:
+        if not isinstance(name, str):
+            raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
+                "input_paths 元素必须都是字符串"
+            )
+        validate_portable_relative_path(name, field="input_paths")
+
     paths = manifest.get("output_paths")
     hashes = manifest.get("output_sha256")
     if not isinstance(paths, list) or not isinstance(hashes, dict):
@@ -131,8 +179,6 @@ def verify_manifest_hashes(manifest: dict[str, object], run_dir: Path) -> None:
         raise ValueError(
             f"output_paths 与 output_sha256 必须一一对应，差异条目: {difference}"
         )
-    for name in manifest.get("input_paths", []):
-        validate_portable_relative_path(name, field="input_paths")
     for name in paths:
         text = validate_portable_relative_path(name, field="output_paths")
         expected = str(hashes[name])
