@@ -90,6 +90,7 @@ def test_load_run_artifacts_rejects_tampered_metrics_before_parse(
         json.dumps({"f1": 0.999999, "n_predicted": 999999}),
         encoding="utf-8",
     )
+
     def fail_if_parsed(*args: object, **kwargs: object) -> object:
         raise AssertionError("解析器不得在哈希校验前执行")
 
@@ -103,6 +104,7 @@ def test_load_run_artifacts_rejects_tampered_predictions_before_parse(
 ) -> None:
     run_dir = _fixture_run(tmp_path)
     (run_dir / "predictions.parquet").write_bytes(b"tampered")
+
     def fail_if_parsed(*args: object, **kwargs: object) -> object:
         raise AssertionError("解析器不得在哈希校验前执行")
 
@@ -167,6 +169,86 @@ def test_load_run_artifacts_rejects_non_completed_status(tmp_path: Path) -> None
         load_run_artifacts(run_dir)
 
 
+@pytest.mark.parametrize(
+    "bad_output_paths",
+    [
+        [[]],
+        [{}],
+        [1],
+        [None],
+        ["metrics.json", ["predictions.parquet"]],
+    ],
+)
+def test_load_run_artifacts_rejects_non_string_output_path_elements(
+    tmp_path: Path, bad_output_paths: object
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    manifest_path = run_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["output_paths"] = bad_output_paths
+    manifest["output_sha256"] = {}
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    with pytest.raises(ArtifactLoadError, match="output_paths"):
+        load_run_artifacts(run_dir)
+
+
+@pytest.mark.parametrize(
+    "bad_output_paths",
+    [
+        [[]],
+        [{}],
+        [1],
+        [None],
+        ["metrics.json", ["predictions.parquet"]],
+    ],
+)
+def test_discover_completed_run_dir_skips_non_string_output_path_elements(
+    tmp_path: Path, bad_output_paths: object
+) -> None:
+    source = _fixture_run(tmp_path)
+    runs_root = tmp_path / "runs"
+    runs_root.mkdir(exist_ok=True)
+    old = runs_root / "run-20260816T000000-complete"
+    shutil.copytree(source, old)
+    bad = runs_root / "run-20260816T999999-bad"
+    bad.mkdir()
+    (bad / "manifest.json").write_text(
+        json.dumps(
+            {
+                "artifact_schema_version": 2,
+                "status": "completed",
+                "output_paths": bad_output_paths,
+                "output_sha256": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert Path(discover_completed_run_dir(runs_root)).resolve() == old.resolve()
+
+
+def test_discover_completed_run_dir_skips_duplicate_output_paths(
+    tmp_path: Path,
+) -> None:
+    source = _fixture_run(tmp_path)
+    runs_root = tmp_path / "runs"
+    runs_root.mkdir(exist_ok=True)
+    old = runs_root / "run-20260816T000000-complete"
+    shutil.copytree(source, old)
+    bad = runs_root / "run-20260816T999999-duplicate"
+    shutil.copytree(source, bad)
+    manifest_path = bad / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["output_paths"].append("config.snapshot.yaml")
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    assert Path(discover_completed_run_dir(runs_root)).resolve() == old.resolve()
+
+
 @pytest.mark.parametrize("omitted_name", list(DASHBOARD_ARTIFACT_FILES.values()))
 def test_load_run_artifacts_rejects_omitted_dashboard_declaration(
     tmp_path: Path, monkeypatch, omitted_name: str
@@ -208,12 +290,93 @@ def test_load_run_artifacts_allows_extra_declared_artifacts(
     assert artifacts.manifest["output_paths"][-1] == "extra.txt"
 
 
+@pytest.mark.parametrize(
+    "value",
+    [-0.01, 1.01, 999.0, "0.8", True, float("nan"), float("inf")],
+)
+def test_load_run_artifacts_rejects_invalid_f1(tmp_path: Path, value: object) -> None:
+    run_dir = _fixture_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    metrics["f1"] = value
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(ArtifactLoadError, match="f1"):
+        load_run_artifacts(run_dir)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [-0.01, 1.01, 999.0, "0.8", True, float("nan"), float("inf")],
+)
+def test_load_run_artifacts_rejects_invalid_top1_correction_rate(
+    tmp_path: Path, value: object
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    metrics["top1_correction_rate"] = value
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(ArtifactLoadError, match="top1_correction_rate"):
+        load_run_artifacts(run_dir)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [-0.01, 1.01, 999.0, "0.8", True, float("nan"), float("inf")],
+)
+def test_load_run_artifacts_rejects_invalid_automatic_coverage(
+    tmp_path: Path, value: object
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    metrics["automatic_coverage"] = value
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(ArtifactLoadError, match="automatic_coverage"):
+        load_run_artifacts(run_dir)
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        lambda m: m.update({"n_predicted": True}),
+        lambda m: m.update({"n_predicted": -1}),
+        lambda m: m.update({"n_predicted": 1.5}),
+        lambda m: m.update({"n_predicted": "3"}),
+        lambda m: m.update({"n_total": 0}),
+        lambda m: m.update({"n_total": True}),
+        lambda m: m.update({"n_predicted": 10, "n_total": 5}),
+        lambda m: m.update({"n_actual_errors": -1}),
+        lambda m: m.update({"n_actual_errors": 999, "n_total": 5}),
+    ],
+)
+def test_load_run_artifacts_rejects_invalid_count_relations(
+    tmp_path: Path, mutator: object
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    mutator(metrics)
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(ArtifactLoadError, match="n_predicted|n_total|n_actual_errors"):
+        load_run_artifacts(run_dir)
+
+
 def test_load_run_artifacts_rejects_semantically_invalid_metrics(
     tmp_path: Path,
 ) -> None:
     run_dir = _fixture_run(tmp_path)
     (run_dir / "metrics.json").write_text(
-        json.dumps({"f1": "not-a-number", "n_predicted": []}),
+        json.dumps(
+            {
+                "f1": "not-a-number",
+                "n_predicted": [],
+                "n_total": 1,
+                "n_actual_errors": 0,
+                "automatic_coverage": 0.0,
+                "top1_correction_rate": None,
+            }
+        ),
         encoding="utf-8",
     )
     _update_manifest_hash(run_dir, "metrics.json")
@@ -228,17 +391,13 @@ def test_load_run_artifacts_rejects_missing_prediction_columns(
 
     run_dir = _fixture_run(tmp_path)
     predictions = pd.read_parquet(run_dir / "predictions.parquet")
-    predictions.drop(columns=["decision"]).to_parquet(
-        run_dir / "predictions.parquet"
-    )
+    predictions.drop(columns=["decision"]).to_parquet(run_dir / "predictions.parquet")
     _update_manifest_hash(run_dir, "predictions.parquet")
     with pytest.raises(ArtifactLoadError, match="predictions.parquet|decision"):
         load_run_artifacts(run_dir)
 
 
-def test_load_run_artifacts_wraps_verifier_permission_error(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_load_run_artifacts_wraps_verifier_permission_error(tmp_path: Path, monkeypatch) -> None:
     run_dir = _fixture_run(tmp_path)
 
     def denied(*args: object, **kwargs: object) -> None:
@@ -250,9 +409,7 @@ def test_load_run_artifacts_wraps_verifier_permission_error(
     assert isinstance(excinfo.value.__cause__, PermissionError)
 
 
-def test_load_run_artifacts_preserves_parser_assertion_error(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_load_run_artifacts_preserves_parser_assertion_error(tmp_path: Path, monkeypatch) -> None:
     run_dir = _fixture_run(tmp_path)
 
     def bad_parser(*args: object, **kwargs: object) -> object:
@@ -342,9 +499,7 @@ def test_discover_completed_run_dir_selects_structurally_complete_but_tampered(
     runs_root.mkdir(exist_ok=True)
     tampered = runs_root / "run-20260816T999999-tampered"
     shutil.copytree(source, tampered)
-    (tampered / "metrics.json").write_text(
-        json.dumps({"f1": 0.999999}), encoding="utf-8"
-    )
+    (tampered / "metrics.json").write_text(json.dumps({"f1": 0.999999}), encoding="utf-8")
     assert Path(discover_completed_run_dir(runs_root)).resolve() == tampered.resolve()
 
 

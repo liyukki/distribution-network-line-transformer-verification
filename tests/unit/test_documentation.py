@@ -18,6 +18,7 @@ ALLOWED_COMMAND_PREFIXES = (
     "python -m ltverify",
     "streamlit run",
     ".venv/Scripts/python.exe -m",
+    ".venv/bin/python -m",
     "py -3.12 -m venv",
     "uv venv",
     "uv python install",
@@ -38,6 +39,10 @@ REFERENCED_PATHS = [
     "notebooks/01_network_sanity.ipynb",
     "notebooks/02_baseline_analysis.ipynb",
     "notebooks/03_robustness_analysis.ipynb",
+    "AI_USAGE.md",
+    "docs/audit-summary.md",
+    "docs/design.md",
+    ".github/workflows/ci.yml",
 ]
 
 
