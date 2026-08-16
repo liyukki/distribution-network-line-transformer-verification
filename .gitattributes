@@ -1,0 +1,5 @@
+# Committed evidence files are hash-verified byte-for-byte; never rewrite
+# their line endings on checkout (core.autocrlf must not alter them).
+reports/metrics/*.csv -text
+reports/metrics/*.json -text
+*.parquet -text
