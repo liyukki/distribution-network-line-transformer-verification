@@ -45,15 +45,20 @@ st.session_state["artifacts"] = artifacts
 st.session_state["demo_mode"] = demo_mode
 
 metrics = artifacts.metrics
+
+
+def _metric_text(key: str) -> str:
+    value = metrics.get(key)
+    if value is None:
+        return "n/a"
+    return f"{float(value):.3f}"
+
+
 columns = st.columns(5)
 columns[0].metric("预测告警数", int(metrics.get("n_predicted", 0)))
-columns[1].metric("F1", f"{float(metrics.get('f1', 0)):.3f}")
-columns[2].metric(
-    "Top-1 修正率", f"{float(metrics.get('top1_correction_rate', 0)):.3f}"
-)
-columns[3].metric(
-    "自动推荐覆盖率", f"{float(metrics.get('automatic_coverage', 0)):.3f}"
-)
+columns[1].metric("F1", _metric_text("f1"))
+columns[2].metric("Top-1 修正率", _metric_text("top1_correction_rate"))
+columns[3].metric("自动推荐覆盖率", _metric_text("automatic_coverage"))
 columns[4].metric("运行状态", str(artifacts.manifest.get("status", "unknown")))
 st.caption(f"运行目录: {artifacts.run_dir.resolve()}")
 

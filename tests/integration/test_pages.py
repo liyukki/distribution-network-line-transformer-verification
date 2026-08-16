@@ -36,12 +36,21 @@ def test_data_pages_render_without_exceptions(run_dir: Path) -> None:
 
 
 def test_robustness_page_renders_with_tmp_aggregates(tmp_path: Path) -> None:
+    metrics = [
+        "precision",
+        "recall",
+        "f1",
+        "top1_correction_rate",
+        "top2_correction_rate",
+        "automatic_coverage",
+        "convergence_rate",
+    ]
     aggregates = pd.DataFrame(
         {
             "family": ["missing_rate", "missing_rate"],
             "value": ["0.0", "0.1"],
-            "mean_f1": [0.9, 0.8],
-            "std_f1": [0.05, 0.06],
+            **{f"mean_{metric}": [0.9, 0.8] for metric in metrics},
+            **{f"std_{metric}": [0.05, 0.06] for metric in metrics},
         }
     )
     csv_path = tmp_path / "experiment_aggregates.csv"

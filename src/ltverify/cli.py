@@ -11,21 +11,15 @@ import pandas as pd
 from ltverify.experiments import expand_experiment_grid, run_experiments
 from ltverify.pipeline import run_pipeline
 
-_STAGE_SUBCOMMANDS = ("simulate", "corrupt", "diagnose", "evaluate")
 _CONFIG_SUBCOMMANDS = ("run-all", "experiments")
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ltverify",
-        description="配电网线变关系智能校验命令行工具",
+        description="配电网线变关系智能校验命令行工具（支持 run-all、experiments、report）",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for name in _STAGE_SUBCOMMANDS:
-        sub = subparsers.add_parser(
-            name, help=f"{name}：暂未实现（请使用 run-all）"
-        )
-        sub.add_argument("--config", required=True, help="YAML 配置文件路径")
     for name in _CONFIG_SUBCOMMANDS:
         sub = subparsers.add_parser(name)
         sub.add_argument("--config", required=True, help="YAML 配置文件路径")
@@ -41,12 +35,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.command in _STAGE_SUBCOMMANDS:
-        print(
-            f"{args.command} 尚未实现：请使用 python -m ltverify run-all 运行完整流水线",
-            file=sys.stderr,
-        )
-        return 1
     if args.command == "report":
         from ltverify.report import generate_default_summary
 

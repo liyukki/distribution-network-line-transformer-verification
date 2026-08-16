@@ -30,7 +30,7 @@ def test_run_all_prints_absolute_run_directory() -> None:
     assert printed.exists()
 
 
-def test_stage_commands_are_explicitly_not_implemented() -> None:
+def test_stage_commands_are_removed_from_parser() -> None:
     result = _run("simulate", "--config", "tests/fixtures/small_config.yaml")
-    assert result.returncode != 0
-    assert "尚未实现" in result.stderr
+    assert result.returncode == 2
+    assert "invalid choice" in result.stderr
