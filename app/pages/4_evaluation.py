@@ -24,7 +24,7 @@ key_metrics = {
         "f1",
         "pr_auc",
         "top1_correction_rate",
-        "top3_correction_rate",
+        "top2_correction_rate",
         "automatic_coverage",
         "insufficient_data_rate",
         "n_total",
@@ -32,7 +32,10 @@ key_metrics = {
     )
 }
 st.dataframe(pd.DataFrame([key_metrics]), use_container_width=True)
-st.caption("主指标为 Precision/Recall/F1/PR-AUC 与 Top-1/Top-3；不使用 Accuracy 作为主结论。")
+st.caption(
+    "主指标为 Precision/Recall/F1/PR-AUC（连续 anomaly_score）与 Top-1/Top-2；"
+    "三馈线场景下 Top-3 不适用，不使用 Accuracy 作为主结论。"
+)
 
 if st.session_state.get("demo_mode"):
     truth = artifacts.truth.set_index("transformer_id")

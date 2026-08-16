@@ -171,7 +171,6 @@ def _run_case(
         artifacts = build_network(config.network)
         profiles = generate_profiles(artifacts, config.profiles, seed=seed)
         simulation = simulate_time_series(artifacts, profiles, config.validation)
-        cache[cache_key] = (artifacts, profiles, simulation)
 
     if not simulation.failures.empty:
         raise RuntimeError(
@@ -186,6 +185,9 @@ def _run_case(
             raise RuntimeError(
                 "critical physical violations in experiment case"
             )
+
+    if cache_key not in cache:
+        cache[cache_key] = (artifacts, profiles, simulation)
 
     truth = build_truth(artifacts)
     ledger = corrupt_ledger(

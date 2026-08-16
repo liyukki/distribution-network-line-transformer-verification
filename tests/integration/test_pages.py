@@ -35,9 +35,13 @@ def test_data_pages_render_without_exceptions(run_dir: Path) -> None:
 
 
 def test_robustness_page_renders_with_real_aggregates() -> None:
+    aggregates = sorted((ROOT / "runs").glob("experiments-*/experiment_aggregates.csv"))
+    if not aggregates:
+        pytest.skip("无实验聚合产物，跳过鲁棒性页面渲染测试")
     app_test = AppTest.from_file(
         ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
     )
     app_test.run()
     raised = [element.value for element in app_test.exception]
     assert len(app_test.exception) == 0, raised
+    assert len(app_test.get("plotly_chart")) >= 1
