@@ -7,7 +7,7 @@ import subprocess
 import uuid
 from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from pydantic import BaseModel
@@ -31,7 +31,7 @@ class RunManifest(BaseModel):
     input_paths: list[str]
     output_paths: list[str]
     output_sha256: dict[str, str] = {}
-    failure_summary: dict[str, str] | None = None
+    failure_summary: dict[str, object] | None = None
 
 
 def git_commit() -> str | None:
@@ -86,6 +86,32 @@ def classify_artifact_schema_version(
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
+def validate_portable_relative_path(value: object, *, field: str) -> str:
+    """Validate a portable, OS-independent relative artifact path.
+
+    The same contract is used for run manifests and experiment manifests:
+    no backslashes, drive letters, UNC/absolute paths, empty segments, or
+    path traversal. This is intentionally based on POSIX path semantics so
+    Windows-style separators cannot bypass the check on a POSIX host.
+    """
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{field} 路径必须是非空字符串")
+    text = value
+    if re.match(r"^[A-Za-z]:", text):
+        raise ValueError(
+            f"{field} 路径禁止盘符前缀/绝对路径: {text!r}"
+        )
+    if "\\" in text:
+        raise ValueError(f"{field} 路径禁止反斜杠/绝对路径: {text!r}")
+    if PurePosixPath(text).is_absolute():
+        raise ValueError(f"{field} 路径禁止绝对路径: {text!r}")
+    if any(part in ("", ".", "..") for part in text.split("/")):
+        raise ValueError(
+            f"{field} 路径禁止空段、点段或路径穿越: {text!r}"
+        )
+    return text
+
+
 def verify_manifest_hashes(manifest: dict[str, object], run_dir: Path) -> None:
     """Verify a schema-v2 manifest against the run directory.
 
@@ -105,12 +131,10 @@ def verify_manifest_hashes(manifest: dict[str, object], run_dir: Path) -> None:
         raise ValueError(
             f"output_paths 与 output_sha256 必须一一对应，差异条目: {difference}"
         )
+    for name in manifest.get("input_paths", []):
+        validate_portable_relative_path(name, field="input_paths")
     for name in paths:
-        text = str(name)
-        if Path(text).is_absolute() or re.match(r"^[A-Za-z]:", text):
-            raise ValueError(f"output_paths 不允许绝对路径: {text}")
-        if ".." in Path(text).parts:
-            raise ValueError(f"output_paths 不允许路径穿越: {text}")
+        text = validate_portable_relative_path(name, field="output_paths")
         expected = str(hashes[name])
         if not _SHA256_PATTERN.match(expected):
             raise ValueError(
@@ -151,7 +175,7 @@ def build_manifest(config_path: Path, run_dir: Path) -> RunManifest:
         python_version=platform.python_version(),
         package_versions=package_versions(),
         random_seed=config.random_seed,
-        input_paths=[str(config_path)],
+        input_paths=[config_path.name],
         output_paths=[],
         output_sha256={},
     )

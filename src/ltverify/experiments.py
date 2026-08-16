@@ -25,7 +25,11 @@ from ltverify.corruption import build_truth, corrupt_ledger, disturb_measurement
 from ltverify.evaluation import evaluate_predictions
 from ltverify.features import build_candidate_features
 from ltverify.io import write_json_atomic
-from ltverify.manifest import git_commit, package_versions
+from ltverify.manifest import (
+    git_commit,
+    package_versions,
+    validate_portable_relative_path,
+)
 from ltverify.network import build_network
 from ltverify.preprocessing import prepare_measurements
 from ltverify.profiles import generate_profiles
@@ -102,6 +106,10 @@ SUMMARY_COLUMNS = [
     "error_type",
     "error_message",
 ]
+
+REQUIRED_EXPERIMENT_OUTPUTS = frozenset(
+    {"robustness_summary.csv", "robustness_aggregates.csv"}
+)
 
 
 @dataclass(frozen=True)
@@ -437,14 +445,16 @@ def verify_experiment_manifest(
     output_files = manifest.get("output_files")
     if not isinstance(output_files, dict) or not output_files:
         raise ValueError("experiment manifest 的 output_files 为空或缺失")
+    if set(output_files) != REQUIRED_EXPERIMENT_OUTPUTS:
+        missing = sorted(REQUIRED_EXPERIMENT_OUTPUTS - set(output_files))
+        extra = sorted(set(output_files) - REQUIRED_EXPERIMENT_OUTPUTS)
+        raise ValueError(
+            "output_files 必须精确包含 "
+            f"{sorted(REQUIRED_EXPERIMENT_OUTPUTS)}；"
+            f"缺失: {missing}，多余: {extra}"
+        )
     for name, expected in output_files.items():
-        text = str(name)
-        if Path(text).is_absolute() or re.match(r"^[A-Za-z]:", text):
-            raise ValueError(f"output_files 不允许绝对路径: {text}")
-        if ".." in Path(text).parts:
-            raise ValueError(f"output_files 不允许路径穿越: {text}")
-        if len(set(output_files)) != len(output_files):
-            raise ValueError("output_files 存在重复条目")
+        text = validate_portable_relative_path(name, field="output_files")
         if not _SHA256_PATTERN.match(str(expected)):
             raise ValueError(f"output_files 哈希必须是 64 位十六进制: {text}")
         path = artifact_dir / text
@@ -456,27 +466,64 @@ def verify_experiment_manifest(
                 f"实验产物校验失败: {text}（期望 {expected}，实际 {actual}）"
             )
     for key in ("experiment_config_sha256", "base_config_sha256"):
-        value = str(manifest.get(key, ""))
-        if not _SHA256_PATTERN.match(value):
+        value = manifest.get(key)
+        if not isinstance(value, str) or not _SHA256_PATTERN.match(value):
             raise ValueError(f"{key} 不是 64 位十六进制哈希")
-    if "experiment_config_snapshot" not in manifest:
-        raise ValueError("experiment manifest 缺少 experiment_config_snapshot")
-    if "base_config_snapshot" not in manifest:
-        raise ValueError("experiment manifest 缺少 base_config_snapshot")
-    if experiment_config_path is not None:
-        actual = _file_sha256(Path(experiment_config_path))
-        if actual != manifest["experiment_config_sha256"]:
-            raise ValueError(
-                f"experiment 配置文件哈希不一致: {experiment_config_path}"
+    for key in ("experiment_config_name", "base_config_name"):
+        validate_portable_relative_path(manifest.get(key), field=key)
+    for key in ("experiment_config_snapshot", "base_config_snapshot"):
+        if not isinstance(manifest.get(key), dict):
+            raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
+                f"experiment manifest 缺少 {key} 字典"
             )
+    if experiment_config_path is not None:
+        path = Path(experiment_config_path)
+        if path.name != manifest["experiment_config_name"]:
+            raise ValueError(
+                "experiment 配置 name 不一致: "
+                f"{path.name} != {manifest['experiment_config_name']}"
+            )
+        if _file_sha256(path) != manifest["experiment_config_sha256"]:
+            raise ValueError(
+                f"experiment 配置 hash 不一致: {experiment_config_path}"
+            )
+        actual_snapshot = _portable(
+            yaml.safe_load(path.read_text(encoding="utf-8"))
+        )
+        if actual_snapshot != manifest["experiment_config_snapshot"]:
+            raise ValueError("experiment 配置 snapshot 与原始 YAML 不一致")
     if base_config_path is not None:
-        actual = _file_sha256(Path(base_config_path))
-        if actual != manifest["base_config_sha256"]:
-            raise ValueError(f"base 配置文件哈希不一致: {base_config_path}")
-    counts = manifest.get("case_counts", {})
-    total = int(counts.get("total", -1))
-    completed = int(counts.get("completed", -1))
-    failed = int(counts.get("failed", -1))
+        path = Path(base_config_path)
+        if path.name != manifest["base_config_name"]:
+            raise ValueError(
+                "base 配置 name 不一致: "
+                f"{path.name} != {manifest['base_config_name']}"
+            )
+        if _file_sha256(path) != manifest["base_config_sha256"]:
+            raise ValueError(
+                f"base 配置 hash 不一致: {base_config_path}"
+            )
+        actual_snapshot = _portable(
+            load_config(path).model_dump(mode="json")
+        )
+        if actual_snapshot != manifest["base_config_snapshot"]:
+            raise ValueError("base 配置 snapshot 与原始配置不一致")
+    counts = manifest.get("case_counts")
+    if not isinstance(counts, dict):
+        raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
+            "case_counts 必须是字典"
+        )
+    for key in ("total", "completed", "failed"):
+        value = counts.get(key)
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
+                f"case_counts.{key} 必须是整数"
+            )
+        if value < 0:
+            raise ValueError(f"case_counts.{key} 不能为负数")
+    total = counts["total"]
+    completed = counts["completed"]
+    failed = counts["failed"]
     if total != completed + failed:
         raise ValueError(
             f"case_counts 不一致: total={total} != completed+failed="
@@ -485,8 +532,23 @@ def verify_experiment_manifest(
     summary_path = artifact_dir / "robustness_summary.csv"
     if not summary_path.exists():
         raise ValueError("缺少 robustness_summary.csv")
-    summary_rows = len(pd.read_csv(summary_path))
-    if summary_rows != total:
+    summary = pd.read_csv(summary_path)
+    if len(summary) != total:
         raise ValueError(
-            f"summary 行数 {summary_rows} 与 case_counts.total {total} 不一致"
+            f"summary 行数 {len(summary)} 与 case_counts.total {total} 不一致"
+        )
+    if "status" not in summary.columns:
+        raise ValueError("robustness_summary.csv 缺少 status 列")
+    unknown_statuses = sorted(
+        set(summary["status"].astype(str).unique()) - {"completed", "failed"}
+    )
+    if unknown_statuses:
+        raise ValueError(f"summary status 存在未知值: {unknown_statuses}")
+    actual_completed = int((summary["status"] == "completed").sum())
+    actual_failed = int((summary["status"] == "failed").sum())
+    if actual_completed != completed or actual_failed != failed:
+        raise ValueError(
+            "case_counts 与 summary 实际状态不一致: "
+            f"completed {completed} != {actual_completed}，"
+            f"failed {failed} != {actual_failed}"
         )
