@@ -54,8 +54,9 @@ def run_pipeline(config_path: Path) -> Path:
 
     failure_context: dict[str, object] = {}
     try:
-        shutil.copyfile(config_path, run_dir / "config.snapshot.yaml")
-        _write_manifest(manifest, run_dir, [])
+        snapshot = run_dir / "config.snapshot.yaml"
+        shutil.copyfile(config_path, snapshot)
+        _write_manifest(manifest, run_dir, [snapshot])
         artifacts = build_network(config.network)
 
         base_case = run_static_validation(artifacts, config.validation)
