@@ -159,21 +159,42 @@ def verify_manifest_hashes(manifest: dict[str, object], run_dir: Path) -> None:
         )
     if not input_paths:
         raise ValueError("input_paths 不能为空列表")
-    if len(input_paths) != len(set(input_paths)):
-        raise ValueError("input_paths 存在重复项")
-    for name in input_paths:
+    for index, name in enumerate(input_paths):
         if not isinstance(name, str):
             raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
-                "input_paths 元素必须都是字符串"
+                f"input_paths[{index}] 必须是字符串"
             )
         validate_portable_relative_path(name, field="input_paths")
+    if len(input_paths) != len(set(input_paths)):
+        raise ValueError("input_paths 存在重复项")
 
     paths = manifest.get("output_paths")
     hashes = manifest.get("output_sha256")
-    if not isinstance(paths, list) or not isinstance(hashes, dict):
-        raise TypeError("清单缺少 output_paths 或 output_sha256 字段")
+    if not isinstance(paths, list):
+        raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
+            "output_paths 必须是 list[str]"
+        )
+    if not isinstance(hashes, dict):
+        raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
+            "output_sha256 必须是 dict[str, str]"
+        )
+    for index, name in enumerate(paths):
+        if not isinstance(name, str):
+            raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
+                f"output_paths[{index}] 必须是字符串"
+            )
+        validate_portable_relative_path(name, field="output_paths")
     if len(paths) != len(set(paths)):
         raise ValueError(f"output_paths 存在重复条目: {paths}")
+    for key, value in hashes.items():
+        if not isinstance(key, str):
+            raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
+                "output_sha256 的键必须是字符串"
+            )
+        if not isinstance(value, str):
+            raise ValueError(  # noqa: TRY004 - manifest contract errors use ValueError
+                f"output_sha256['{key}'] 必须是字符串"
+            )
     if set(paths) != set(hashes.keys()):
         difference = sorted(set(paths) ^ set(hashes.keys()))
         raise ValueError(
@@ -181,10 +202,10 @@ def verify_manifest_hashes(manifest: dict[str, object], run_dir: Path) -> None:
         )
     for name in paths:
         text = validate_portable_relative_path(name, field="output_paths")
-        expected = str(hashes[name])
+        expected = hashes[name]
         if not _SHA256_PATTERN.match(expected):
             raise ValueError(
-                f"output_sha256 必须是 64 位十六进制: {text} -> {expected}"
+                f"output_sha256['{text}'] 必须是 64 位十六进制字符串"
             )
         path = Path(run_dir) / text
         if not path.exists():
@@ -198,10 +219,12 @@ def verify_manifest_hashes(manifest: dict[str, object], run_dir: Path) -> None:
         raise ValueError(
             "schema-v2 清单必须包含 config.snapshot.yaml 哈希（旧清单请重新运行流水线）"
         )
-    config_sha = str(manifest.get("config_sha256", ""))
-    if not _SHA256_PATTERN.match(config_sha):
+    config_sha_value = manifest.get("config_sha256")
+    if not isinstance(config_sha_value, str) or not _SHA256_PATTERN.match(
+        config_sha_value
+    ):
         raise ValueError("manifest.config_sha256 不是 64 位十六进制哈希")
-    if hashes["config.snapshot.yaml"] != config_sha:
+    if hashes["config.snapshot.yaml"] != config_sha_value:
         raise ValueError(
             "config.snapshot.yaml 哈希与 manifest.config_sha256 不一致"
         )
