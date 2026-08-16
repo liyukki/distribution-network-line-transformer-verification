@@ -87,7 +87,7 @@ python -m ltverify experiments --config configs/robustness.yaml
 
 **物理检查说明**：零负荷网络的 base-case 检查只证明拓扑可解（收敛、电压与平衡基线）；逐时刻校验（每时刻收敛、电压范围、变压器负载率、功率平衡）由时序仿真记录并随运行产物输出。
 
-**默认 30 天流水线**（运行 ID 20260816T104417Z-8b3337，schema-v2 证据由 python -m ltverify report 生成：default_summary.json 与可移植副本 default_manifest.json）：
+**默认 30 天流水线**（运行 ID 20260816T121135Z-bd2df0，schema-v2 证据由 python -m ltverify report 生成：default_summary.json 与可移植副本 default_manifest.json）：
 
 - 增强方法：Precision 0.143、Recall 0.200、F1 0.167、PR-AUC 0.378（连续 anomaly_score 全样本口径）、PR-AUC（scored 子集诊断口径）0.378（scored_coverage 1.0）、Top-1 修正率 0.2、Top-2 修正率 0.4、自动推荐覆盖率 0.292；Top-3 在三馈线场景标记为不适用。
 - 基线（仅原始电压相关）：全部不触发告警，F1 0.0。
@@ -97,7 +97,7 @@ python -m ltverify experiments --config configs/robustness.yaml
 
 **机会基线参照**：三候选均匀随机排序下，Top-1/Top-2 修正率的描述性期望约为 1/3 与 2/3；默认场景实际错误仅 5 台（n=5），样本过小，不能据此作显著性结论。
 
-**口径说明**：PR-AUC 仅在测试集同时含正负样本时适用，单类别真值时为 null（不适用）而非 0；pr_auc_scored 为仅可评分子集的诊断口径，须与 scored_coverage 同时解读。Top-k 排名只接受有限分数与有限证据权重，NaN 与正负无穷候选一律排除并计数。配置快照 config.snapshot.yaml 纳入清单哈希闭环；report 命令先验签后解析，篡改任一产物都会在读取前拒绝。物理越限默认零容忍（三类可配置工程违规——功率平衡/电压越限/变压器过载——均为 critical，terminate_on_critical=true 时流水线与实验案例失败）；潮流不收敛是不可降级的硬失败。base-case 违规详情（count/types/消息/severity）全量写入 metrics.json。看板对 schema 采取四态兼容：缺失/旧版提示不兼容并隐藏不可靠字段、当前版本正常展示、未来版本提示未验证、非法版本安全停止。Streamlit 最低版本 1.51；report 命令的源清单副本可通过 --manifest-output 显式指定（默认 <输出名>.manifest.json）。
+**口径说明**：PR-AUC 仅在测试集同时含正负样本时适用，单类别真值时为 null（不适用）而非 0；pr_auc_scored 为仅可评分子集的诊断口径，须与 scored_coverage 同时解读。Top-k 排名只接受有限分数与有限证据权重，NaN 与正负无穷候选一律排除并计数。配置快照 config.snapshot.yaml 纳入清单哈希闭环；report 命令先验签后解析，篡改任一产物都会在读取前拒绝。运行清单 input_paths 只保存可移植的配置文件名，不记录本机绝对路径或反斜杠路径；终止型 base-case 失败的 failure_summary 含 stage/severity/violation_count/violation_types/violations 结构化详情。物理越限默认零容忍（三类可配置工程违规——功率平衡/电压越限/变压器过载——均为 critical，terminate_on_critical=true 时流水线与实验案例失败）；潮流不收敛是不可降级的硬失败。base-case 违规详情（count/types/消息/severity）全量写入 metrics.json。看板对 schema 采取四态兼容：缺失/旧版提示不兼容并隐藏不可靠字段、当前版本正常展示、未来版本提示未验证、非法版本安全停止。Streamlit 最低版本 1.51；report 命令的源清单副本可通过 --manifest-output 显式指定（默认 <输出名>.manifest.json）。
 
 **鲁棒性与消融实验**：130 案例矩阵的原始与聚合结果见 reports/metrics/robustness_summary.csv 与 robustness_aggregates.csv（含逐案例物理字段）；权威实验清单为 robustness_experiment_manifest.json（含实验配置与基础配置的哈希/快照，可用 verify_experiment_manifest 校验）。
 
