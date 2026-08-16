@@ -175,7 +175,7 @@ def test_report_rejects_output_collisions(tmp_path: Path) -> None:
         generate_default_summary(run_dir, output, manifest_output=manifest_alias)
     assert not output.exists()
     # 覆盖源清单声明产物
-    with pytest.raises(ValueError, match="源产物"):
+    with pytest.raises(ValueError, match="源运行目录产物"):
         generate_default_summary(run_dir, run_dir / "manifest.json")
-    with pytest.raises(ValueError, match="源产物"):
+    with pytest.raises(ValueError, match="源运行目录产物"):
         generate_default_summary(run_dir, run_dir / "predictions.parquet")

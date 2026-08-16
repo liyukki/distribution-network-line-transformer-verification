@@ -16,8 +16,12 @@ from ltverify.config import load_config
 from ltverify.contracts import DataContractError
 from ltverify.data_access import load_run_artifacts
 from ltverify.evaluation import evaluate_predictions
-from ltverify.io import write_json_atomic
-from ltverify.manifest import file_sha256, verify_manifest_hashes
+from ltverify.io import read_json, write_json_atomic
+from ltverify.manifest import (
+    classify_artifact_schema_version,
+    file_sha256,
+    verify_manifest_hashes,
+)
 from ltverify.scoring import ScoreWeights, diagnose, score_candidates
 
 _BASELINE_WEIGHTS = ScoreWeights(
@@ -113,13 +117,44 @@ def generate_default_summary(
     given, otherwise to <output_stem>.manifest.json next to the report.
     """
     run_dir = Path(run_dir)
+    output_path = Path(output_path)
+    if manifest_output is None:
+        manifest_target = output_path.with_name(
+            f"{output_path.stem}.manifest.json"
+        )
+    else:
+        manifest_target = Path(manifest_output)
+
+    manifest_path = run_dir / "manifest.json"
+    if not manifest_path.exists():
+        raise ValueError("缺少运行清单: manifest.json")
+    manifest = read_json(manifest_path)
+    state, _ = classify_artifact_schema_version(
+        manifest.get("artifact_schema_version")
+    )
+    if state != "current":
+        raise ValueError(
+            f"运行目录清单版本不受支持: "
+            f"{manifest.get('artifact_schema_version')!r}（state={state}）"
+        )
+    verify_manifest_hashes(manifest, run_dir)
+
+    if output_path.resolve() == manifest_target.resolve():
+        raise ValueError("report 输出与清单输出路径相同")
+    forbidden_names = list(manifest.get("output_paths", [])) + [
+        "manifest.json",
+        "config.snapshot.yaml",
+    ]
+    for name in forbidden_names:
+        forbidden = (run_dir / str(name)).resolve()
+        if (
+            output_path.resolve() == forbidden
+            or manifest_target.resolve() == forbidden
+        ):
+            raise ValueError(f"禁止覆盖源运行目录产物: {name}")
+
     artifacts = load_run_artifacts(run_dir)
     config = load_config(run_dir / "config.snapshot.yaml")
-    if artifacts.manifest.get("artifact_schema_version") != 2:
-        raise ValueError(
-            "旧版运行目录（schema != 2）无法生成可信证据，请重新运行流水线"
-        )
-    verify_manifest_hashes(artifacts.manifest, run_dir)
 
     baseline_scored = score_candidates(
         artifacts.candidate_features, _BASELINE_WEIGHTS
@@ -175,11 +210,5 @@ def generate_default_summary(
         ),
     }
     write_json_atomic(summary, output_path)
-    if manifest_output is None:
-        manifest_target = output_path.with_name(
-            f"{output_path.stem}.manifest.json"
-        )
-    else:
-        manifest_target = Path(manifest_output)
-    write_json_atomic(artifacts.manifest, manifest_target)
+    write_json_atomic(manifest, manifest_target)
     return output_path
