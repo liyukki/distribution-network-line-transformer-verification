@@ -24,7 +24,6 @@ class ProfileConfig(BaseModel):
 
 
 ALLOWED_VIOLATION_TYPES = (
-    "non_convergence",
     "power_balance",
     "voltage_out_of_bounds",
     "transformer_overload",
@@ -38,7 +37,6 @@ class ValidationConfig(BaseModel):
     transformer_loading_limit_percent: float = Field(default=100.0, gt=0.0)
     terminate_on_critical: bool = True
     critical_violation_types: tuple[str, ...] = (
-        "non_convergence",
         "power_balance",
         "voltage_out_of_bounds",
         "transformer_overload",

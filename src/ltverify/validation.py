@@ -14,8 +14,6 @@ import pandapower as pp
 from ltverify.config import ValidationConfig
 from ltverify.network import NetworkArtifacts
 
-_CRITICAL_VIOLATION_TYPES = ("non_convergence", "power_balance")
-
 
 @dataclass(frozen=True)
 class PowerFlowValidation:

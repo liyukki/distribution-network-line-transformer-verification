@@ -132,6 +132,9 @@ def run_pipeline(config_path: Path) -> Path:
             base_case.absolute_power_balance_error_mw
         )
         metrics["base_case_severity"] = base_case.severity
+        metrics["base_case_violation_count"] = len(base_case.violations)
+        metrics["base_case_violation_types"] = list(base_case.violation_types)
+        metrics["base_case_violations"] = list(base_case.violations)
 
         outputs: list[Path] = [
             run_dir / "config.snapshot.yaml",

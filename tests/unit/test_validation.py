@@ -72,7 +72,7 @@ def test_check_solved_network_records_physical_violations() -> None:
     relaxed = check_solved_network(
         artifacts.net,
         ValidationConfig(
-            critical_violation_types=("non_convergence", "power_balance")
+            critical_violation_types=("power_balance",)
         ),
     )
     assert relaxed.severity == "warning"
