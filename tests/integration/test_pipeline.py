@@ -35,7 +35,7 @@ def test_small_pipeline_writes_all_artifacts() -> None:
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["status"] == "completed"
     assert manifest["artifact_schema_version"] == 2
-    assert set(manifest["output_sha256"]) == set(EXPECTED_ARTIFACTS[2:])
+    assert set(manifest["output_sha256"]) == set(EXPECTED_ARTIFACTS) - {"manifest.json"}
     verify_manifest_hashes(manifest, run_dir)
     metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
     assert "precision" in metrics

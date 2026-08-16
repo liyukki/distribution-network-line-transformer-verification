@@ -49,7 +49,8 @@ def write_json_atomic(payload: Any, path: Path) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = _temporary_path(target)
     tmp.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False),
+        encoding="utf-8",
     )
     tmp.replace(target)
     return target

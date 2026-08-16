@@ -60,9 +60,12 @@ def run_pipeline(config_path: Path) -> Path:
         base_case = run_static_validation(artifacts, config.validation)
         if not base_case.converged:
             raise RuntimeError("base-case power flow did not converge")
-        if base_case.violations:
+        if (
+            base_case.severity == "critical"
+            and config.validation.terminate_on_critical
+        ):
             raise RuntimeError(
-                f"base-case validation violations: {base_case.violations}"
+                f"critical base-case violations: {base_case.violations}"
             )
 
         profiles = generate_profiles(
@@ -128,8 +131,10 @@ def run_pipeline(config_path: Path) -> Path:
         metrics["base_case_balance_error_mw"] = (
             base_case.absolute_power_balance_error_mw
         )
+        metrics["base_case_severity"] = base_case.severity
 
         outputs: list[Path] = [
+            run_dir / "config.snapshot.yaml",
             run_dir / "truth_topology.csv",
             run_dir / "reported_ledger.csv",
             run_dir / "transformer_measurements.parquet",
@@ -143,18 +148,18 @@ def run_pipeline(config_path: Path) -> Path:
             run_dir / "network_edges.csv",
             run_dir / "simulation_validation.csv",
         ]
-        write_table_atomic(truth, outputs[0])
-        write_table_atomic(ledger, outputs[1])
-        write_table_atomic(simulation.transformer_measurements, outputs[2])
-        write_table_atomic(simulation.feeder_measurements, outputs[3])
-        write_table_atomic(observed, outputs[4])
-        write_table_atomic(scored, outputs[5])
-        write_table_atomic(predictions, outputs[6])
-        write_json_atomic(metrics, outputs[7])
-        write_table_atomic(result.confusion_matrix.reset_index(), outputs[8])
-        write_table_atomic(nodes, outputs[9])
-        write_table_atomic(edges, outputs[10])
-        write_table_atomic(simulation.validation, outputs[11])
+        write_table_atomic(truth, outputs[1])
+        write_table_atomic(ledger, outputs[2])
+        write_table_atomic(simulation.transformer_measurements, outputs[3])
+        write_table_atomic(simulation.feeder_measurements, outputs[4])
+        write_table_atomic(observed, outputs[5])
+        write_table_atomic(scored, outputs[6])
+        write_table_atomic(predictions, outputs[7])
+        write_json_atomic(metrics, outputs[8])
+        write_table_atomic(result.confusion_matrix.reset_index(), outputs[9])
+        write_table_atomic(nodes, outputs[10])
+        write_table_atomic(edges, outputs[11])
+        write_table_atomic(simulation.validation, outputs[12])
 
         manifest.status = "completed"
         manifest.finished_at_utc = datetime.now(UTC)

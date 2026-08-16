@@ -2,6 +2,7 @@
 
 import hashlib
 import platform
+import re
 import subprocess
 import uuid
 from datetime import UTC, datetime
@@ -61,17 +62,58 @@ def file_sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+
+
 def verify_manifest_hashes(manifest: dict[str, object], run_dir: Path) -> None:
-    """Raise on any artifact whose bytes no longer match the manifest."""
-    for name, expected in manifest.get("output_sha256", {}).items():
-        path = Path(run_dir) / str(name)
+    """Verify a schema-v2 manifest against the run directory.
+
+    Enforces: no duplicate output paths; output_paths and output_sha256
+    keys match exactly; every path is a safe relative name; every hash is
+    a 64-hex SHA-256; every file exists and matches; and the config
+    snapshot hash chain (config.snapshot.yaml == config_sha256) holds.
+    """
+    paths = manifest.get("output_paths")
+    hashes = manifest.get("output_sha256")
+    if not isinstance(paths, list) or not isinstance(hashes, dict):
+        raise TypeError("清单缺少 output_paths 或 output_sha256 字段")
+    if len(paths) != len(set(paths)):
+        raise ValueError(f"output_paths 存在重复条目: {paths}")
+    if set(paths) != set(hashes.keys()):
+        difference = sorted(set(paths) ^ set(hashes.keys()))
+        raise ValueError(
+            f"output_paths 与 output_sha256 必须一一对应，差异条目: {difference}"
+        )
+    for name in paths:
+        text = str(name)
+        if Path(text).is_absolute() or re.match(r"^[A-Za-z]:", text):
+            raise ValueError(f"output_paths 不允许绝对路径: {text}")
+        if ".." in Path(text).parts:
+            raise ValueError(f"output_paths 不允许路径穿越: {text}")
+        expected = str(hashes[name])
+        if not _SHA256_PATTERN.match(expected):
+            raise ValueError(
+                f"output_sha256 必须是 64 位十六进制: {text} -> {expected}"
+            )
+        path = Path(run_dir) / text
         if not path.exists():
-            raise ValueError(f"缺少清单产物: {path}")
+            raise ValueError(f"缺少清单产物: {text}")
         actual = file_sha256(path)
         if actual != expected:
             raise ValueError(
-                f"产物校验失败: {name}（期望 {expected}，实际 {actual}）"
+                f"产物校验失败: {text}（期望 {expected}，实际 {actual}）"
             )
+    if "config.snapshot.yaml" not in hashes:
+        raise ValueError(
+            "schema-v2 清单必须包含 config.snapshot.yaml 哈希（旧清单请重新运行流水线）"
+        )
+    config_sha = str(manifest.get("config_sha256", ""))
+    if not _SHA256_PATTERN.match(config_sha):
+        raise ValueError("manifest.config_sha256 不是 64 位十六进制哈希")
+    if hashes["config.snapshot.yaml"] != config_sha:
+        raise ValueError(
+            "config.snapshot.yaml 哈希与 manifest.config_sha256 不一致"
+        )
 
 
 def build_manifest(config_path: Path, run_dir: Path) -> RunManifest:

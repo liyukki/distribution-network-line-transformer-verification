@@ -356,10 +356,13 @@ def run_experiments(path: Path, output_dir: Path) -> Path:
     aggregates.to_csv(output_dir / "experiment_aggregates.csv", index=False)
 
     manifest = {
+        "artifact_schema_version": 2,
         "experiment_config_path": str(path),
         "experiment_config_sha256": _file_sha256(path),
+        "experiment_config_snapshot": raw,
         "base_config_path": raw.get("base_config"),
-        "config_snapshot": raw,
+        "base_config_sha256": _file_sha256(Path(raw["base_config"])),
+        "base_config_snapshot": base_config.model_dump(mode="json"),
         "git_commit": git_commit(),
         "python_version": platform.python_version(),
         "package_versions": package_versions(),

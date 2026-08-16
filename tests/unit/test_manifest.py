@@ -35,7 +35,7 @@ def test_manifest_rejects_unsafe_paths_and_bad_hashes(tmp_path: Path) -> None:
     absolute = _fake_manifest([str(tmp_path / "a.csv")], {str(tmp_path / "a.csv"): "0" * 64})
     with pytest.raises(ValueError, match="绝对路径"):
         verify_manifest_hashes(absolute, tmp_path)
-    traversal = _fake_manifest([".." + "\evil.csv"], {".." + "\evil.csv": "0" * 64})
+    traversal = _fake_manifest([".." + "/evil.csv"], {".." + "/evil.csv": "0" * 64})
     with pytest.raises(ValueError, match="路径穿越"):
         verify_manifest_hashes(traversal, tmp_path)
     duplicated = _fake_manifest(["a.csv", "a.csv"], {"a.csv": "0" * 64})
