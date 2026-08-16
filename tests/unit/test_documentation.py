@@ -68,3 +68,10 @@ def test_readme_referenced_paths_exist() -> None:
     for path in REFERENCED_PATHS:
         assert path in text, f"README 未引用路径: {path}"
         assert (ROOT / path).exists(), f"README 引用但不存在: {path}"
+
+
+def test_streamlit_minimum_version_declared() -> None:
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert "streamlit>=1.51,<2" in pyproject
+    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+    assert "streamlit>=1.51,<2" in requirements

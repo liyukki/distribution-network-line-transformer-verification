@@ -176,3 +176,50 @@ def test_evaluate_applies_evidence_weight_threshold() -> None:
     )
     # T001 的物理馈线 F01 被证据门槛排除；T002 的 Top-1 是 F01(0.8) 而非物理 F02
     assert result.metrics["top1_correction_rate"] == 0.0
+
+
+def test_single_class_all_negative_pr_auc_is_null() -> None:
+    predictions, truth, ledger, candidate_scores = evaluation_fixture()
+    # 所有台账与真值一致 → 实际错误数为 0（单类别）
+    ledger_all_correct = truth.rename(
+        columns={"physical_feeder_id": "reported_feeder_id"}
+    )
+    result = evaluate_predictions(
+        predictions, truth, ledger_all_correct, candidate_scores
+    )
+    assert result.metrics["pr_auc"] is None
+    assert result.metrics["pr_auc_applicable"] is False
+    assert result.metrics["pr_auc_unavailable_reason"] == "single_class_all_negative"
+    assert result.metrics["n_actual_errors"] == 0
+
+
+def test_single_class_all_positive_pr_auc_is_null() -> None:
+    predictions, truth, ledger, candidate_scores = evaluation_fixture()
+    all_positive = truth.assign(physical_feeder_id=["F02", "F03", "F01"])
+    result = evaluate_predictions(
+        predictions, truth=all_positive, ledger=ledger, candidate_scores=candidate_scores
+    )
+    assert result.metrics["n_actual_errors"] == 3
+    assert result.metrics["pr_auc"] is None
+    assert result.metrics["pr_auc_applicable"] is False
+    assert result.metrics["pr_auc_unavailable_reason"] == "single_class_all_positive"
+
+
+def test_topk_rejects_non_finite_scores_and_weights() -> None:
+    predictions, truth, ledger, candidate_scores = evaluation_fixture()
+    candidate_scores["available_feature_weight"] = 1.0
+    candidate_scores.loc[
+        (candidate_scores["transformer_id"] == "T002")
+        & (candidate_scores["candidate_feeder_id"] == "F01"),
+        "enhanced_score",
+    ] = float("inf")
+    candidate_scores.loc[
+        (candidate_scores["transformer_id"] == "T002")
+        & (candidate_scores["candidate_feeder_id"] == "F02"),
+        "enhanced_score",
+    ] = float("-inf")
+    result = evaluate_predictions(predictions, truth, ledger, candidate_scores)
+    # T002 只剩 F03 一个有限候选：Top-2 不可评价（排除计数已上报）
+    assert result.metrics["top2_evaluated_count"] == 1
+    assert "excluded_candidate_count" in result.metrics
+    assert result.metrics["excluded_candidate_count"] >= 2

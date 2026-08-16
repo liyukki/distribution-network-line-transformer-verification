@@ -20,3 +20,29 @@ def test_invalid_voltage_limits_are_rejected(tmp_path: Path) -> None:
     path.write_text("validation:\n  voltage_min_pu: 1.1\n  voltage_max_pu: 0.9\n", encoding="utf-8")
     with pytest.raises(ValidationError):
         load_config(path)
+
+
+def test_unknown_critical_violation_type_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "bad.yaml"
+    path.write_text(
+        "validation:\n  critical_violation_types: [bogus_type]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError):
+        load_config(path)
+
+
+def test_duplicate_critical_types_are_normalized() -> None:
+    from ltverify.config import ValidationConfig
+
+    config = ValidationConfig(
+        critical_violation_types=(
+            "transformer_overload",
+            "power_balance",
+            "transformer_overload",
+        )
+    )
+    assert config.critical_violation_types == (
+        "transformer_overload",
+        "power_balance",
+    )

@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from ltverify.pipeline import run_pipeline
 from ltverify.report import generate_default_summary
 
@@ -101,3 +103,29 @@ def test_summary_is_portable_and_carries_hashes(tmp_path: Path) -> None:
         "violation_type_counts",
     ):
         assert key in validation
+
+
+def test_report_refuses_tampered_config_snapshot(tmp_path: Path) -> None:
+    run_dir = _fixture_run(tmp_path)
+    snapshot = run_dir / "config.snapshot.yaml"
+    snapshot.write_text(
+        snapshot.read_text(encoding="utf-8") + "\n# tampered\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="config"):
+        generate_default_summary(run_dir, tmp_path / "summary.json")
+
+
+def test_report_manifest_output_contract(tmp_path: Path) -> None:
+    run_dir = _fixture_run(tmp_path)
+    custom_output = tmp_path / "custom_summary.json"
+    custom_manifest = tmp_path / "custom.manifest.json"
+    generate_default_summary(
+        run_dir, custom_output, manifest_output=custom_manifest
+    )
+    assert custom_manifest.exists()
+    assert not (tmp_path / "default_manifest.json").exists()
+    # 未指定时使用 <stem>.manifest.json
+    another = tmp_path / "another_summary.json"
+    generate_default_summary(run_dir, another)
+    assert (tmp_path / "another_summary.manifest.json").exists()

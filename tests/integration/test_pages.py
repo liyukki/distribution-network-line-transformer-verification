@@ -66,6 +66,86 @@ def test_robustness_page_renders_with_tmp_aggregates(tmp_path: Path) -> None:
     assert len(app_test.get("plotly_chart")) >= 1
 
 
+def test_robustness_page_lists_complete_metrics(tmp_path: Path) -> None:
+    metric_columns = [
+        "precision",
+        "recall",
+        "f1",
+        "pr_auc",
+        "pr_auc_scored",
+        "top1_correction_rate",
+        "top2_correction_rate",
+        "automatic_coverage",
+        "scored_coverage",
+        "insufficient_data_rate",
+        "convergence_rate",
+    ]
+    aggregates = pd.DataFrame(
+        {
+            "family": ["missing_rate", "missing_rate"],
+            "value": ["0.0", "0.1"],
+            **{f"mean_{metric}": [0.9, 0.8] for metric in metric_columns},
+            **{f"std_{metric}": [0.05, 0.06] for metric in metric_columns},
+        }
+    )
+    csv_path = tmp_path / "experiment_aggregates.csv"
+    aggregates.to_csv(csv_path, index=False)
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "5_robustness.py", default_timeout=120
+    )
+    app_test.run()
+    app_test.text_input[0].set_value(str(csv_path))
+    app_test.run()
+    options = list(app_test.selectbox[1].options)
+    for metric in ("pr_auc", "pr_auc_scored", "scored_coverage", "insufficient_data_rate"):
+        assert metric in options, f"缺少指标选项: {metric}"
+    # 每个新增指标至少渲染一次且不崩溃（含全空值情形）
+    for index, metric in enumerate(("pr_auc", "pr_auc_scored", "scored_coverage", "insufficient_data_rate")):
+        app_test.selectbox[1].set_value(metric)
+        app_test.run()
+        raised = [element.value for element in app_test.exception]
+        assert len(app_test.exception) == 0, f"{metric} raised: {raised}"
+
+
+def test_schema_three_state_branches(run_dir: Path) -> None:
+    artifacts = load_run_artifacts(run_dir)
+
+    def run_with_schema(version: object) -> list[str]:
+        manifest = dict(artifacts.manifest)
+        if version is None:
+            manifest.pop("artifact_schema_version", None)
+        else:
+            manifest["artifact_schema_version"] = version
+        target = RunArtifacts(
+            run_dir=artifacts.run_dir,
+            manifest=manifest,
+            truth=artifacts.truth,
+            ledger=artifacts.ledger,
+            observed_measurements=artifacts.observed_measurements,
+            feeder_measurements=artifacts.feeder_measurements,
+            candidate_features=artifacts.candidate_features,
+            predictions=artifacts.predictions,
+            metrics=dict(artifacts.metrics),
+            confusion_matrix=artifacts.confusion_matrix,
+            network_nodes=artifacts.network_nodes,
+            network_edges=artifacts.network_edges,
+        )
+        app_test = AppTest.from_file(
+            ROOT / "app" / "pages" / "4_evaluation.py", default_timeout=120
+        )
+        app_test.session_state["artifacts"] = target
+        app_test.session_state["demo_mode"] = True
+        app_test.run()
+        raised = [element.value for element in app_test.exception]
+        assert len(app_test.exception) == 0, raised
+        return [element.value for element in app_test.warning]
+
+    assert any("旧版本" in text for text in run_with_schema(None))
+    assert any("旧版本" in text for text in run_with_schema(1))
+    assert not run_with_schema(2)
+    assert any("未验证" in text for text in run_with_schema(3))
+
+
 def test_legacy_run_page_4_shows_warning_without_crash(
     run_dir: Path, monkeypatch
 ) -> None:

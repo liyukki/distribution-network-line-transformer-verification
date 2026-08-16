@@ -30,6 +30,17 @@ def test_intentional_overload_is_detected() -> None:
     )
 
 
+def test_non_convergence_is_always_fatal_regardless_of_config() -> None:
+    from ltverify.validation import check_solved_network
+
+    # 即使 critical_violation_types 为空，未求解网络仍必须报告 critical
+    empty_types = ValidationConfig(critical_violation_types=())
+    result = check_solved_network({}, empty_types)
+    assert result.converged is False
+    assert result.severity == "critical"
+    assert "non_convergence" in result.violation_types
+
+
 def test_non_convergence_is_reported_not_silent(monkeypatch: pytest.MonkeyPatch) -> None:
     artifacts = build_network(NetworkConfig())
 

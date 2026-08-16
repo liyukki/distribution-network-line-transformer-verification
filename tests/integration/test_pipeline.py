@@ -73,3 +73,23 @@ def test_pipeline_stops_on_critical_violation(monkeypatch) -> None:
     )
     with pytest.raises(RuntimeError, match="critical physical violations"):
         run_pipeline(Path("tests/fixtures/small_config.yaml"))
+
+
+def test_base_case_warning_violations_do_not_stop_pipeline(monkeypatch) -> None:
+    from ltverify import pipeline as pipeline_module
+    from ltverify.validation import PowerFlowValidation
+
+    def warning_static(*args: object, **kwargs: object) -> PowerFlowValidation:
+        return PowerFlowValidation(
+            converged=True,
+            voltage_min_pu=0.90,
+            voltage_max_pu=1.05,
+            absolute_power_balance_error_mw=1e-9,
+            violations=("transformer overload: trafo 1 at 110.0%",),
+            severity="warning",
+            violation_types=("transformer_overload",),
+        )
+
+    monkeypatch.setattr(pipeline_module, "run_static_validation", warning_static)
+    run_dir = run_pipeline(Path("tests/fixtures/small_config.yaml"))
+    assert run_dir.exists()
