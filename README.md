@@ -87,7 +87,7 @@ python -m ltverify experiments --config configs/robustness.yaml
 
 **物理检查说明**：零负荷网络的 base-case 检查只证明拓扑可解（收敛、电压与平衡基线）；逐时刻校验（每时刻收敛、电压范围、变压器负载率、功率平衡）由时序仿真记录并随运行产物输出。
 
-**默认 30 天流水线**（运行 ID 20260816T121135Z-bd2df0，schema-v2 证据由 python -m ltverify report 生成：default_summary.json 与可移植副本 default_manifest.json）：
+**默认 30 天流水线**（运行 ID 20260816T121728Z-3101c6，schema-v2 证据由 python -m ltverify report 生成：default_summary.json 与可移植副本 default_manifest.json）：
 
 - 增强方法：Precision 0.143、Recall 0.200、F1 0.167、PR-AUC 0.378（连续 anomaly_score 全样本口径）、PR-AUC（scored 子集诊断口径）0.378（scored_coverage 1.0）、Top-1 修正率 0.2、Top-2 修正率 0.4、自动推荐覆盖率 0.292；Top-3 在三馈线场景标记为不适用。
 - 基线（仅原始电压相关）：全部不触发告警，F1 0.0。
