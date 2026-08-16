@@ -12,12 +12,18 @@ SUMMARY_COLUMNS = [
     "precision",
     "recall",
     "f1",
+    "pr_auc",
+    "pr_auc_scored",
     "top1_correction_rate",
     "top2_correction_rate",
     "automatic_coverage",
+    "scored_coverage",
+    "insufficient_data_rate",
+    "n_actual_errors",
     "runtime_seconds",
     "convergence_rate",
     "violation_count",
+    "maximum_power_balance_error_mw",
     "voltage_min_pu",
     "voltage_max_pu",
     "maximum_transformer_loading_percent",
@@ -83,4 +89,7 @@ seeds: [42, 43]
     assert (summary["status"] == "completed").all()
     aggregates = pd.read_csv(output_dir / "experiment_aggregates.csv")
     assert "failure_count" in aggregates.columns
+    assert "mean_pr_auc" in aggregates.columns
+    assert "mean_pr_auc_scored" in aggregates.columns
+    assert "mean_scored_coverage" in aggregates.columns
     assert len(aggregates) == 1

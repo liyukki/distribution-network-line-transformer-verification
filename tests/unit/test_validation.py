@@ -55,7 +55,17 @@ def test_check_solved_network_records_physical_violations() -> None:
     assert result.converged is True
     assert result.maximum_transformer_loading_percent > 100.0
     assert "transformer_overload" in " | ".join(result.violation_types)
-    assert result.severity == "warning"
+    # 默认 critical_violation_types 含 transformer_overload 与 voltage_out_of_bounds
+    assert result.severity == "critical"
+    # 关闭硬限值后同样违规降级为 warning 但仍被记录
+    relaxed = check_solved_network(
+        artifacts.net,
+        ValidationConfig(
+            critical_violation_types=("non_convergence", "power_balance")
+        ),
+    )
+    assert relaxed.severity == "warning"
+    assert "transformer_overload" in " | ".join(relaxed.violation_types)
     artifacts.net.res_ext_grid["p_mw"] = artifacts.net.res_ext_grid["p_mw"] + 1.0
     broken = check_solved_network(artifacts.net, ValidationConfig())
     assert "power_balance" in " | ".join(broken.violation_types)

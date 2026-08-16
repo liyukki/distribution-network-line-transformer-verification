@@ -63,3 +63,41 @@ def test_generate_default_summary_from_artifacts(tmp_path: Path) -> None:
     assert "f1" in summary["baseline_comparison"]
     assert summary["failure_boundary"]["same_feeder_pair_count"] > 0
     assert summary["failure_boundary"]["cross_feeder_pair_count"] > 0
+
+
+def test_summary_is_portable_and_carries_hashes(tmp_path: Path) -> None:
+    run_dir = _fixture_run(tmp_path)
+    output = tmp_path / "summary.json"
+    generate_default_summary(run_dir, output)
+    summary = json.loads(output.read_text(encoding="utf-8"))
+    # 不得包含本机绝对工作区路径
+    assert "manifest_path" not in summary
+
+    def walk_strings(value: object) -> list[str]:
+        found: list[str] = []
+        if isinstance(value, str):
+            found.append(value)
+        elif isinstance(value, dict):
+            for item in value.values():
+                found.extend(walk_strings(item))
+        elif isinstance(value, list):
+            for item in value:
+                found.extend(walk_strings(item))
+        return found
+
+    for text in walk_strings(summary):
+        assert "D:\\" not in text.replace("\\", "\\")
+    assert summary["artifact_schema_version"] == 2
+    assert len(summary["source_manifest_sha256"]) == 64
+    validation = summary["time_series_validation"]
+    for key in (
+        "timestamp_count",
+        "convergence_rate",
+        "voltage_min_pu",
+        "voltage_max_pu",
+        "maximum_transformer_loading_percent",
+        "maximum_power_balance_error_mw",
+        "severity_counts",
+        "violation_type_counts",
+    ):
+        assert key in validation

@@ -131,3 +131,97 @@ output_root: {tmp_path.as_posix()}
     summary = pd.read_csv(output_dir / "experiment_summary.csv")
     assert len(summary) == 1
     assert (summary["status"] == "failed").all()
+
+
+def test_case_with_critical_violation_is_not_completed(
+    monkeypatch, tmp_path: Path
+) -> None:
+    import pandas as pd
+
+    from ltverify.config import NetworkConfig, ProfileConfig, ValidationConfig
+    from ltverify.experiments import run_experiments
+    from ltverify.network import build_network
+    from ltverify.profiles import generate_profiles
+    from ltverify.simulation import SimulationResult, simulate_time_series
+
+    artifacts = build_network(NetworkConfig(transformers_per_feeder=3))
+    profiles = generate_profiles(
+        artifacts, ProfileConfig(days=1, interval_minutes=360), seed=42
+    )
+    good = simulate_time_series(artifacts, profiles, ValidationConfig())
+
+    def violating_simulate(*args: object, **kwargs: object) -> SimulationResult:
+        return SimulationResult(
+            transformer_measurements=good.transformer_measurements.copy(),
+            feeder_measurements=good.feeder_measurements.copy(),
+            failures=pd.DataFrame(),
+            validation=pd.DataFrame(
+                [
+                    {
+                        "timestamp": pd.Timestamp("2026-01-01 00:00"),
+                        "converged": True,
+                        "voltage_min_pu": 0.85,
+                        "voltage_max_pu": 1.0,
+                        "maximum_transformer_loading_percent": 150.0,
+                        "absolute_power_balance_error_mw": 1e-9,
+                        "violation_type": "voltage_out_of_bounds|transformer_overload",
+                        "message": "voltage below 0.90 p.u.",
+                        "severity": "critical",
+                    }
+                ]
+            ),
+        )
+
+    monkeypatch.setattr(
+        "ltverify.experiments.simulate_time_series", violating_simulate
+    )
+    base = tmp_path / "small_base.yaml"
+    base.write_text(
+        f"""random_seed: 42
+network:
+  feeder_count: 3
+  transformers_per_feeder: 3
+  hv_kv: 110.0
+  mv_kv: 10.0
+  lv_kv: 0.4
+profiles:
+  start: "2026-01-01"
+  days: 1
+  interval_minutes: 360
+  power_factor: 0.95
+  pv_scale: 1.0
+validation:
+  voltage_min_pu: 0.90
+  voltage_max_pu: 1.10
+  power_balance_tolerance_mw: 0.000001
+  transformer_loading_limit_percent: 100.0
+  terminate_on_critical: true
+corruption:
+  ledger_error_rate: 0.10
+  voltage_noise_std_pu: 0.0005
+  missing_rate: 0.01
+  spike_rate: 0.001
+  time_shift_steps: 0
+  time_shift_device_rate: 0.10
+scoring:
+  current_score_threshold: 0.70
+  margin_threshold: 0.08
+  minimum_coverage: 0.80
+output_root: {tmp_path.as_posix()}
+""",
+        encoding="utf-8",
+    )
+    robustness = tmp_path / "robustness.yaml"
+    robustness.write_text(
+        f"""base_config: {base.as_posix()}
+experiments:
+  ledger_error_rate: [0.10]
+ablation_features: []
+seeds: [42]
+""",
+        encoding="utf-8",
+    )
+    run_experiments(robustness, tmp_path / "out2")
+    summary = pd.read_csv(tmp_path / "out2" / "experiment_summary.csv")
+    assert len(summary) == 1
+    assert (summary["status"] == "failed").all()
