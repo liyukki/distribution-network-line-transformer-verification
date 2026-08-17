@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -109,3 +110,32 @@ def test_publication_sources_do_not_make_prohibited_claims() -> None:
     )
     for phrase in prohibited:
         assert phrase not in combined
+
+
+def _digest(path: Path) -> str:
+    return sha256(path.read_bytes()).hexdigest()
+
+
+def test_paper_figure_data_is_loaded_from_public_evidence() -> None:
+    from scripts.generate_paper_figures import load_figure_data
+
+    data = load_figure_data(ROOT)
+    assert data["enhanced"]["f1"] == pytest.approx(0.16666666666666666)
+    assert data["enhanced"]["pr_auc"] == pytest.approx(0.3778787878787879)
+    assert data["baseline"]["f1"] == pytest.approx(0.0)
+    assert data["confusion_matrix"] == [[13, 6], [4, 1]]
+
+
+def test_generate_paper_figures_does_not_mutate_evidence(tmp_path: Path) -> None:
+    from scripts.generate_paper_figures import generate_figures
+
+    sources = (
+        ROOT / "reports/metrics/default_summary.json",
+        ROOT / "reports/evidence/default_run/confusion_matrix.csv",
+        ROOT / "reports/metrics/robustness_aggregates.csv",
+    )
+    before = {path: _digest(path) for path in sources}
+    generated = generate_figures(tmp_path, ROOT)
+    assert {path.name for path in generated} == set(REQUIRED_FIGURES)
+    assert all(path.is_file() and path.stat().st_size > 10_000 for path in generated)
+    assert {path: _digest(path) for path in sources} == before
