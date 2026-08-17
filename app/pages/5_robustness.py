@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -10,14 +11,23 @@ from ltverify.experiments import (
     LEGACY_AGGREGATES_NAME,
     LEGACY_SUMMARY_NAME,
 )
+from ltverify.i18n import (
+    family_label,
+    localize_frame,
+    metric_label,
+    normalize_locale,
+    translate,
+)
 from ltverify.plotting import robustness_line_figure
 from ltverify.robustness_loader import RobustnessLoadError, load_robustness_artifacts
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_EXPERIMENT_CONFIG = _REPO_ROOT / "configs/robustness.yaml"
 _DEFAULT_BASE_CONFIG = _REPO_ROOT / "configs/default.yaml"
+LOGGER = logging.getLogger(__name__)
+locale = normalize_locale(st.session_state.get("locale"))
 
-st.title("鲁棒性实验")
+st.title(translate(locale, "robustness.title"))
 
 
 def _default_experiment_paths() -> tuple[str, str]:
@@ -55,19 +65,16 @@ def _source_config_paths() -> tuple[Path | None, Path | None]:
 
 default_aggregates_path, default_summary_path = _default_experiment_paths()
 aggregates_path = st.text_input(
-    "实验聚合 CSV 路径（robustness_aggregates.csv）",
+    translate(locale, "robustness.aggregates_path"),
     value=default_aggregates_path,
 )
 if not aggregates_path:
-    st.info(
-        "未找到实验聚合产物，请先运行 "
-        "python -m ltverify experiments --config configs/robustness.yaml"
-    )
+    st.info(translate(locale, "robustness.missing_products"))
     st.stop()
 
 aggregates_file = Path(aggregates_path)
 summary_path = st.text_input(
-    "案例明细 CSV 路径（robustness_summary.csv，仅用于明细与失败原因）",
+    translate(locale, "robustness.summary_path"),
     value=default_summary_path,
 )
 summary_file = Path(summary_path) if summary_path else None
@@ -81,20 +88,33 @@ try:
         base_config_path=base_config_path,
     )
 except RobustnessLoadError as exc:
-    st.error(str(exc))
+    LOGGER.warning("Robustness artifact loading failed: %s", exc)
+    if locale == "zh-CN":
+        st.error(translate(locale, "robustness.load_failed", detail=str(exc)))
+    else:
+        st.error(translate(locale, "robustness.load_failed_generic"))
     st.stop()
 
 aggregates = artifacts.aggregates
+verification_message = (
+    artifacts.message
+    if locale == "zh-CN"
+    else translate(locale, f"robustness.verification.{artifacts.verification_state}")
+)
 if artifacts.verification_state == "strict_verified":
-    st.success(artifacts.message)
+    st.success(verification_message)
 elif artifacts.verification_state == "artifact_hashes_verified":
-    st.warning(artifacts.message)
+    st.warning(verification_message)
 else:
-    st.warning(artifacts.message)
+    st.warning(verification_message)
 
-family = st.selectbox("实验族", sorted(aggregates["family"].unique().tolist()))
+family = st.selectbox(
+    translate(locale, "robustness.family"),
+    sorted(aggregates["family"].unique().tolist()),
+    format_func=lambda value: family_label(locale, value),
+)
 metric = st.selectbox(
-    "指标",
+    translate(locale, "robustness.metric"),
     [
         "precision",
         "recall",
@@ -108,36 +128,55 @@ metric = st.selectbox(
         "insufficient_data_rate",
         "convergence_rate",
     ],
+    format_func=lambda value: metric_label(locale, value),
 )
-st.caption(
-    "pr_auc 为主样本口径；pr_auc_scored 为仅可评分子集的诊断口径，"
-    "须与 scored_coverage 同时解读；空值显示为不适用。"
-)
+st.caption(translate(locale, "robustness.caption"))
 mean_column = f"mean_{metric}"
 if mean_column not in aggregates.columns:
-    st.info(f"{metric} 不适用：聚合产物缺少 {mean_column} 列")
+    st.info(
+        translate(
+            locale,
+            "robustness.missing_metric",
+            metric=metric_label(locale, metric),
+            column=mean_column,
+        )
+    )
     st.stop()
 numeric = pd.to_numeric(aggregates[mean_column], errors="coerce")
 if not numeric.notna().any():
     if aggregates[mean_column].notna().any():
-        st.error(f"{metric} 不适用：{mean_column} 不是可用数值列")
+        st.error(
+            translate(
+                locale,
+                "robustness.nonnumeric_metric",
+                metric=metric_label(locale, metric),
+                column=mean_column,
+            )
+        )
     else:
-        st.info(f"{metric} 不适用：{mean_column} 全为空值")
+        st.info(
+            translate(
+                locale,
+                "robustness.empty_metric",
+                metric=metric_label(locale, metric),
+                column=mean_column,
+            )
+        )
     st.stop()
 aggregates = aggregates.copy()
 aggregates[mean_column] = numeric
 try:
-    figure = robustness_line_figure(aggregates, family, metric)
+    figure = robustness_line_figure(aggregates, family, metric, locale=locale)
 except ValueError as exc:
     st.error(str(exc))
     st.stop()
 st.plotly_chart(figure, width="stretch")
-with st.expander("聚合汇总"):
-    st.dataframe(aggregates, width="stretch")
+with st.expander(translate(locale, "robustness.aggregates")):
+    st.dataframe(localize_frame(aggregates, locale), width="stretch")
 
 if artifacts.summary is not None:
-    with st.expander("案例明细与失败原因"):
-        st.dataframe(artifacts.summary, width="stretch")
+    with st.expander(translate(locale, "robustness.case_details")):
+        st.dataframe(localize_frame(artifacts.summary, locale), width="stretch")
         failed = artifacts.summary[artifacts.summary["status"] != "completed"]
         if len(failed):
-            st.warning(f"存在 {len(failed)} 个失败案例，详见明细表。")
+            st.warning(translate(locale, "robustness.failed_cases", count=len(failed)))

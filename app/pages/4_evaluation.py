@@ -2,13 +2,15 @@ import pandas as pd
 import streamlit as st
 from sklearn.metrics import precision_recall_curve
 
+from ltverify.i18n import localize_frame, normalize_locale, translate
 from ltverify.plotting import confusion_matrix_figure, pr_curve_figure
 
-st.title("模型评估")
+locale = normalize_locale(st.session_state.get("locale"))
+st.title(translate(locale, "evaluation.title"))
 
 artifacts = st.session_state.get("artifacts")
 if artifacts is None:
-    st.info("请先在主页加载运行目录。")
+    st.info(translate(locale, "common.load_home_first"))
     st.stop()
 
 from ltverify.manifest import classify_artifact_schema_version
@@ -20,25 +22,21 @@ if "artifact_schema_version" not in artifacts.manifest:
     schema_state = "legacy"
 
 if schema_state == "legacy":
-    st.warning(
-        "该运行目录由旧版本生成（指标口径不兼容），"
-        "旧版 PR-AUC 不作为当前口径展示，PR 曲线不可用；"
-        "请重新运行 python -m ltverify run-all 后再查看。"
-    )
+    st.warning(translate(locale, "evaluation.legacy_warning"))
 elif schema_state == "newer":
-    st.warning(
-        f"该运行目录使用未验证的 schema 版本 {schema_version}；"
-        "仅展示已验证的有限字段，不执行依赖 schema-v2 的派生计算。"
-    )
+    st.warning(translate(locale, "evaluation.newer_warning", version=schema_version))
 elif schema_state == "invalid":
     st.error(
-        f"运行目录清单版本非法: "
-        f"{artifacts.manifest.get('artifact_schema_version')!r}，无法可靠展示。"
+        translate(
+            locale,
+            "evaluation.invalid_schema",
+            version=repr(artifacts.manifest.get("artifact_schema_version")),
+        )
     )
     st.stop()
 
 st.plotly_chart(
-    confusion_matrix_figure(artifacts.confusion_matrix.to_numpy()),
+    confusion_matrix_figure(artifacts.confusion_matrix.to_numpy(), locale=locale),
     width="stretch",
 )
 
@@ -62,12 +60,8 @@ key_metrics = {
 if schema_state == "legacy":
     key_metrics.pop("pr_auc", None)
     key_metrics.pop("pr_auc_scored", None)
-st.dataframe(pd.DataFrame([key_metrics]), width="stretch")
-st.caption(
-    "主指标为 Precision/Recall/F1/PR-AUC（连续 anomaly_score）与 Top-1/Top-2；"
-    "pr_auc_scored 为 scored 子集上的诊断指标，须与 scored_coverage 同时解读；"
-    "三馈线场景下 Top-3 不适用，不使用 Accuracy 作为主结论。"
-)
+st.dataframe(localize_frame(pd.DataFrame([key_metrics]), locale), width="stretch")
+st.caption(translate(locale, "evaluation.caption"))
 
 if st.session_state.get("demo_mode"):
     pr_supported = (
@@ -77,7 +71,7 @@ if st.session_state.get("demo_mode"):
         and {"transformer_id", "physical_feeder_id"} <= set(artifacts.truth.columns)
     )
     if not pr_supported:
-        st.info("该运行目录不绘制 PR 曲线（旧版或未验证的 schema）。")
+        st.info(translate(locale, "evaluation.pr_unsupported"))
     else:
         labels = artifacts.ledger[["transformer_id", "reported_feeder_id"]].merge(
             artifacts.truth[["transformer_id", "physical_feeder_id"]],
@@ -95,8 +89,8 @@ if st.session_state.get("demo_mode"):
         scores = merged["anomaly_score"].fillna(0.0).to_numpy(dtype=float)
         precision, recall, _ = precision_recall_curve(y_true, scores)
         st.plotly_chart(
-            pr_curve_figure(precision.tolist(), recall.tolist()),
+            pr_curve_figure(precision.tolist(), recall.tolist(), locale=locale),
             width="stretch",
         )
 else:
-    st.info("PR 曲线需要真实标签，请开启左侧的演示评价模式。")
+    st.info(translate(locale, "evaluation.pr_requires_truth"))

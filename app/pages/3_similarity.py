@@ -1,23 +1,29 @@
 import streamlit as st
 
+from ltverify.i18n import normalize_locale, translate
 from ltverify.plotting import similarity_heatmap_figure
 
-st.title("相似度矩阵")
+locale = normalize_locale(st.session_state.get("locale"))
+st.title(translate(locale, "similarity.title"))
 
 artifacts = st.session_state.get("artifacts")
 if artifacts is None:
-    st.info("请先在主页加载运行目录。")
+    st.info(translate(locale, "common.load_home_first"))
     st.stop()
 
-mode = st.selectbox("矩阵类型", ["原始电压", "去公共趋势残差", "一阶差分"])
+mode = st.selectbox(
+    translate(locale, "similarity.matrix_type"),
+    ["raw", "residual", "difference"],
+    format_func=lambda value: translate(locale, f"similarity.mode.{value}"),
+)
 observed = artifacts.observed_measurements
 voltage = observed.pivot(index="timestamp", columns="transformer_id", values="voltage_pu")
-if mode == "原始电压":
+if mode == "raw":
     matrix = voltage
-elif mode == "去公共趋势残差":
+elif mode == "residual":
     matrix = voltage.sub(voltage.median(axis=1), axis=0)
 else:
     matrix = voltage.diff()
 correlation = matrix.corr()
-st.plotly_chart(similarity_heatmap_figure(correlation), width="stretch")
-st.caption("矩阵按所选模式在共同有效时间点上计算 Pearson 相关系数。")
+st.plotly_chart(similarity_heatmap_figure(correlation, locale=locale), width="stretch")
+st.caption(translate(locale, "similarity.caption"))

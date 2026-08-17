@@ -7,6 +7,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from ltverify.data_access import RunArtifacts, load_run_artifacts
+from ltverify.i18n import metric_label
 from ltverify.manifest import file_sha256
 from ltverify.pipeline import run_pipeline
 
@@ -154,6 +155,50 @@ def test_data_pages_render_without_exceptions(run_dir: Path) -> None:
         app_test.run()
         raised = [element.value for element in app_test.exception]
         assert len(app_test.exception) == 0, f"{page} raised: {raised}"
+
+
+def test_data_pages_render_complete_english_interface(run_dir: Path) -> None:
+    artifacts = load_run_artifacts(run_dir)
+    expected_titles = {
+        "1_network.py": "Network topology",
+        "2_diagnosis.py": "Transformer diagnosis",
+        "3_similarity.py": "Similarity matrix",
+        "4_evaluation.py": "Model evaluation",
+    }
+    rendered: dict[str, AppTest] = {}
+    for page, expected_title in expected_titles.items():
+        app_test = AppTest.from_file(ROOT / "app" / "pages" / page, default_timeout=120)
+        app_test.session_state["artifacts"] = artifacts
+        app_test.session_state["demo_mode"] = True
+        app_test.session_state["locale"] = "en-US"
+        app_test.run()
+        assert len(app_test.exception) == 0
+        assert expected_title in [element.value for element in app_test.title]
+        rendered[page] = app_test
+
+    assert "Transformer ID" in rendered["1_network.py"].dataframe[0].value.columns
+    assert rendered["2_diagnosis.py"].selectbox[0].label == "Select transformer"
+    diagnosis_text = " ".join(element.value for element in rendered["2_diagnosis.py"].markdown)
+    assert "Decision" in diagnosis_text
+    assert rendered["3_similarity.py"].selectbox[0].options == [
+        "Raw voltage",
+        "Common-trend residual",
+        "First difference",
+    ]
+    assert "Precision" in rendered["4_evaluation.py"].dataframe[0].value.columns
+
+
+def test_robustness_page_uses_english_without_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    app_test = AppTest.from_file(ROOT / "app" / "pages" / "5_robustness.py")
+    app_test.session_state["locale"] = "en-US"
+    app_test.run()
+    assert len(app_test.exception) == 0
+    assert "Robustness experiments" in [element.value for element in app_test.title]
+    assert app_test.text_input[0].label == "Aggregate CSV path (robustness_aggregates.csv)"
+    assert "No aggregate experiment artifact was found" in app_test.info[0].value
 
 
 def test_evaluation_page_uses_ledger_truth_labels(
@@ -388,12 +433,12 @@ def test_robustness_page_lists_complete_metrics(tmp_path: Path) -> None:
     app_test.run()
     options = list(app_test.selectbox[1].options)
     for metric in ("pr_auc", "pr_auc_scored", "scored_coverage", "insufficient_data_rate"):
-        assert metric in options, f"缺少指标选项: {metric}"
+        assert metric_label("zh-CN", metric) in options, f"缺少指标选项: {metric}"
     # 每个新增指标至少渲染一次且不崩溃（含全空值情形）
     for index, metric in enumerate(
         ("pr_auc", "pr_auc_scored", "scored_coverage", "insufficient_data_rate")
     ):
-        app_test.selectbox[1].set_value(metric)
+        app_test.selectbox[1].select(metric_label("zh-CN", metric))
         app_test.run()
         raised = [element.value for element in app_test.exception]
         assert len(app_test.exception) == 0, f"{metric} raised: {raised}"

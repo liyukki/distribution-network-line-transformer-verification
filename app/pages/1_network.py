@@ -1,12 +1,14 @@
 import streamlit as st
 
+from ltverify.i18n import localize_frame, normalize_locale, translate
 from ltverify.plotting import topology_figure
 
-st.title("网络拓扑")
+locale = normalize_locale(st.session_state.get("locale"))
+st.title(translate(locale, "network.title"))
 
 artifacts = st.session_state.get("artifacts")
 if artifacts is None:
-    st.info("请先在主页加载运行目录。")
+    st.info(translate(locale, "common.load_home_first"))
     st.stop()
 
 demo_mode = bool(st.session_state.get("demo_mode"))
@@ -15,15 +17,16 @@ st.plotly_chart(
         artifacts.network_nodes,
         artifacts.network_edges,
         color_edges_by_feeder=demo_mode,
+        locale=locale,
     ),
     width="stretch",
 )
 if demo_mode:
-    st.caption("演示评价模式：线条颜色按物理馈线着色；标记颜色为电压等级。")
+    st.caption(translate(locale, "network.demo_caption"))
 else:
-    st.caption("普通模式：线路为中性色，不展示物理馈线归属；标记颜色为电压等级。")
-with st.expander("台账与推荐对照"):
-    st.dataframe(artifacts.predictions, width="stretch")
+    st.caption(translate(locale, "network.normal_caption"))
+with st.expander(translate(locale, "network.ledger_comparison")):
+    st.dataframe(localize_frame(artifacts.predictions, locale), width="stretch")
     if st.session_state.get("demo_mode"):
-        st.subheader("物理真值（仅演示评价模式）")
-        st.dataframe(artifacts.truth, width="stretch")
+        st.subheader(translate(locale, "network.physical_truth"))
+        st.dataframe(localize_frame(artifacts.truth, locale), width="stretch")
