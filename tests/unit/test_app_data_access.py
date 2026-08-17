@@ -413,9 +413,7 @@ def test_load_run_artifacts_rejects_invalid_applicability_metadata(
                 "top3_correction_rate": None,
             }
         ),
-        lambda m: m.update(
-            {"top1_evaluated_count": 0, "top1_correction_rate": 0.5}
-        ),
+        lambda m: m.update({"top1_evaluated_count": 0, "top1_correction_rate": 0.5}),
     ],
 )
 def test_loader_rejects_inconsistent_topk_metadata(
@@ -576,9 +574,7 @@ def test_load_run_artifacts_rejects_list_valued_decision(tmp_path: Path) -> None
 
     run_dir = _fixture_run(tmp_path)
     predictions = pd.read_parquet(run_dir / "predictions.parquet")
-    predictions["decision"] = [
-        [str(value)] for value in predictions["decision"]
-    ]
+    predictions["decision"] = [[str(value)] for value in predictions["decision"]]
     predictions.to_parquet(run_dir / "predictions.parquet")
     _update_manifest_hash(run_dir, "predictions.parquet")
     with pytest.raises(ArtifactLoadError, match="decision.*非空字符串"):
@@ -592,9 +588,7 @@ def test_load_run_artifacts_rejects_list_valued_transformer_id(
 
     run_dir = _fixture_run(tmp_path)
     predictions = pd.read_parquet(run_dir / "predictions.parquet")
-    predictions["transformer_id"] = [
-        [str(value)] for value in predictions["transformer_id"]
-    ]
+    predictions["transformer_id"] = [[str(value)] for value in predictions["transformer_id"]]
     predictions.to_parquet(run_dir / "predictions.parquet")
     _update_manifest_hash(run_dir, "predictions.parquet")
     with pytest.raises(ArtifactLoadError, match="transformer_id.*非空字符串"):

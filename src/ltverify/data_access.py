@@ -269,15 +269,12 @@ def _validate_metrics(metrics: dict[str, object]) -> None:
         if n_actual_errors == 0:
             if count != 0 or rate is not None or coverage is not None:
                 raise ArtifactLoadError(
-                    f"{key} 适用且无实际错误时 evaluated_count 必须为 0，"
-                    "rate/coverage 必须为 null"
+                    f"{key} 适用且无实际错误时 evaluated_count 必须为 0，rate/coverage 必须为 null"
                 )
             continue
 
         if count > n_actual_errors:
-            raise ArtifactLoadError(
-                f"metrics.{count_key} 不能大于 metrics.n_actual_errors"
-            )
+            raise ArtifactLoadError(f"metrics.{count_key} 不能大于 metrics.n_actual_errors")
         expected_coverage = count / n_actual_errors
         if coverage is None or not math.isclose(
             coverage,
@@ -286,8 +283,7 @@ def _validate_metrics(metrics: dict[str, object]) -> None:
             abs_tol=1e-12,
         ):
             raise ArtifactLoadError(
-                f"metrics.{coverage_key} 必须等于 "
-                f"{count_key}/n_actual_errors = {expected_coverage}"
+                f"metrics.{coverage_key} 必须等于 {count_key}/n_actual_errors = {expected_coverage}"
             )
         if count == 0:
             if rate is not None:
@@ -341,12 +337,8 @@ def _validate_transformer_identity_contracts(
         _require_nonempty_string_series(frame, "transformer_id", name)
         if frame["transformer_id"].duplicated().any():
             raise ArtifactLoadError(f"{name} 的 transformer_id 存在重复")
-    _require_nonempty_string_series(
-        truth, "physical_feeder_id", "truth_topology.csv"
-    )
-    _require_nonempty_string_series(
-        ledger, "reported_feeder_id", "reported_ledger.csv"
-    )
+    _require_nonempty_string_series(truth, "physical_feeder_id", "truth_topology.csv")
+    _require_nonempty_string_series(ledger, "reported_feeder_id", "reported_ledger.csv")
     ids = [set(frame["transformer_id"]) for frame in (truth, ledger, predictions)]
     if not all(item == ids[0] for item in ids[1:]):
         raise ArtifactLoadError("truth/ledger/predictions 的 transformer_id 集合不一致")

@@ -133,9 +133,7 @@ def test_streamlit_shows_domain_error_for_list_valued_decision(
 
     run_dir = run_pipeline(Path("tests/fixtures/small_config.yaml"))
     predictions = pd.read_parquet(run_dir / "predictions.parquet")
-    predictions["decision"] = [
-        [str(value)] for value in predictions["decision"]
-    ]
+    predictions["decision"] = [[str(value)] for value in predictions["decision"]]
     predictions.to_parquet(run_dir / "predictions.parquet")
     _update_manifest_hash(run_dir, "predictions.parquet")
     monkeypatch.setenv("LTVERIFY_RUN_DIR", str(run_dir.resolve()))
