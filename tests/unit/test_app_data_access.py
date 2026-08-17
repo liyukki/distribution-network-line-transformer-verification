@@ -14,7 +14,11 @@ from ltverify.manifest import file_sha256
 from ltverify.pipeline import run_pipeline
 
 
-def _fixture_run(tmp_path: Path) -> Path:
+def _fixture_run(
+    tmp_path: Path,
+    *,
+    ledger_error_rate: float = 0.20,
+) -> Path:
     config = tmp_path / "small.yaml"
     config.write_text(
         f"""random_seed: 42
@@ -34,7 +38,7 @@ validation:
   voltage_min_pu: 0.90
   voltage_max_pu: 1.10
 corruption:
-  ledger_error_rate: 0.20
+  ledger_error_rate: {ledger_error_rate}
   voltage_noise_std_pu: 0.0005
   missing_rate: 0.01
   spike_rate: 0.001
@@ -69,6 +73,19 @@ def test_load_run_artifacts_reads_all_artifacts(tmp_path: Path) -> None:
     assert len(artifacts.ledger) == 9
     assert "precision" in artifacts.metrics
     assert set(artifacts.predictions.columns) >= {"transformer_id", "decision"}
+
+
+def test_load_run_artifacts_accepts_valid_zero_error_run(tmp_path: Path) -> None:
+    run_dir = _fixture_run(tmp_path, ledger_error_rate=0.0)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["n_actual_errors"] == 0
+    assert metrics["topk_applicable"]["top1"] is True
+    assert metrics["top1_correction_rate"] is None
+    assert metrics["top1_evaluation_coverage"] is None
+    assert metrics["top1_evaluated_count"] == 0
+
+    artifacts = load_run_artifacts(run_dir)
+    assert artifacts.metrics["n_actual_errors"] == 0
 
 
 def test_missing_predictions_raises_with_path_and_command(tmp_path: Path) -> None:
