@@ -82,6 +82,18 @@ def test_streamlit_rejects_semantically_invalid_metrics(
     assert len(app_test.error) >= 1
 
 
+def test_streamlit_hides_absolute_run_path(monkeypatch) -> None:
+    run_dir = run_pipeline(Path("tests/fixtures/small_config.yaml"))
+    monkeypatch.setenv("LTVERIFY_RUN_DIR", str(run_dir.resolve()))
+    app_test = AppTest.from_file(ROOT / "app" / "streamlit_app.py", default_timeout=120)
+    app_test.run()
+    assert len(app_test.exception) == 0
+    captions = [element.value for element in getattr(app_test, "caption", [])]
+    text = " ".join([element.value for element in app_test.markdown] + captions)
+    assert str(run_dir.resolve()) not in text
+    assert run_dir.name in text
+
+
 def test_streamlit_rejects_out_of_range_f1(monkeypatch) -> None:
     run_dir = run_pipeline(Path("tests/fixtures/small_config.yaml"))
     metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))

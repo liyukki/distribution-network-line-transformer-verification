@@ -290,6 +290,125 @@ def test_load_run_artifacts_allows_extra_declared_artifacts(
     assert artifacts.manifest["output_paths"][-1] == "extra.txt"
 
 
+DISPLAYED_REQUIRED_RATIOS = (
+    "precision",
+    "recall",
+    "f1",
+    "automatic_coverage",
+    "insufficient_data_rate",
+    "scored_coverage",
+)
+
+DISPLAYED_NULLABLE_RATIOS = (
+    "pr_auc",
+    "pr_auc_scored",
+    "top1_correction_rate",
+    "top2_correction_rate",
+    "top3_correction_rate",
+    "top1_evaluation_coverage",
+    "top2_evaluation_coverage",
+    "top3_evaluation_coverage",
+)
+
+INVALID_RATIOS = (-0.01, 1.01, "0.8")
+
+
+@pytest.mark.parametrize("field", DISPLAYED_REQUIRED_RATIOS)
+@pytest.mark.parametrize("value", INVALID_RATIOS)
+def test_load_run_artifacts_rejects_invalid_displayed_required_ratio(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    metrics[field] = value
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(ArtifactLoadError, match=field):
+        load_run_artifacts(run_dir)
+
+
+@pytest.mark.parametrize("field", DISPLAYED_NULLABLE_RATIOS)
+@pytest.mark.parametrize("value", INVALID_RATIOS)
+def test_load_run_artifacts_rejects_invalid_displayed_nullable_ratio(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    metrics[field] = value
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(ArtifactLoadError, match=field):
+        load_run_artifacts(run_dir)
+
+
+def test_load_run_artifacts_rejects_missing_displayed_required_ratio(
+    tmp_path: Path,
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    metrics.pop("precision")
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(ArtifactLoadError, match="precision"):
+        load_run_artifacts(run_dir)
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        lambda m: m.update({"pr_auc_applicable": "yes"}),
+        lambda m: m.update({"pr_auc_applicable": True, "pr_auc": None}),
+        lambda m: m.update({"pr_auc_applicable": False, "pr_auc": 0.5}),
+        lambda m: m.update({"pr_auc_scored_applicable": 1}),
+        lambda m: m.update({"pr_auc_scored_applicable": True, "pr_auc_scored": None}),
+        lambda m: m.update({"pr_auc_scored_applicable": False, "pr_auc_scored": 0.5}),
+        lambda m: m.update({"topk_applicable": []}),
+        lambda m: m.update({"topk_applicable": {"top1": True}}),
+        lambda m: m.update({"topk_applicable": {"top1": 1, "top2": True, "top3": False}}),
+    ],
+)
+def test_load_run_artifacts_rejects_invalid_applicability_metadata(
+    tmp_path: Path, mutator: object
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    mutator(metrics)
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(ArtifactLoadError, match="pr_auc|topk|applicable"):
+        load_run_artifacts(run_dir)
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        lambda m: m.update({"n_actual_correct": True}),
+        lambda m: m.update({"n_actual_correct": -1}),
+        lambda m: m.update({"n_actual_correct": 1.5}),
+        lambda m: m.update({"n_actual_correct": 1, "n_actual_errors": 1, "n_total": 5}),
+        lambda m: m.update({"top1_evaluated_count": -1}),
+        lambda m: m.update({"top2_evaluated_count": True}),
+        lambda m: m.update({"excluded_candidate_count": -1}),
+        lambda m: m.update({"candidate_feeder_count": 0}),
+        lambda m: m.update({"candidate_feeder_count": True}),
+        lambda m: m.update({"scored_coverage": 0.9, "insufficient_data_rate": 0.0}),
+    ],
+)
+def test_load_run_artifacts_rejects_invalid_count_and_derived_relations(
+    tmp_path: Path, mutator: object
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    mutator(metrics)
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(
+        ArtifactLoadError,
+        match="n_actual_correct|evaluated|excluded|candidate|scored_coverage|insufficient",
+    ):
+        load_run_artifacts(run_dir)
+
+
 @pytest.mark.parametrize(
     "value",
     [-0.01, 1.01, 999.0, "0.8", True, float("nan"), float("inf")],
@@ -362,23 +481,81 @@ def test_load_run_artifacts_rejects_invalid_count_relations(
         load_run_artifacts(run_dir)
 
 
+def test_load_run_artifacts_rejects_n_total_mismatch_with_predictions(
+    tmp_path: Path,
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    metrics["n_total"] = 999
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(ArtifactLoadError, match="n_total"):
+        load_run_artifacts(run_dir)
+
+
+def test_load_run_artifacts_rejects_coverage_mismatch_with_predicted_count(
+    tmp_path: Path,
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    metrics["n_predicted"] = 0
+    metrics["automatic_coverage"] = 1.0
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(ArtifactLoadError, match="automatic_coverage|n_predicted"):
+        load_run_artifacts(run_dir)
+
+
+def test_load_run_artifacts_rejects_f1_mismatch_with_confusion_matrix(
+    tmp_path: Path,
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    metrics["f1"] = 1.0
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(ArtifactLoadError, match="f1|confusion"):
+        load_run_artifacts(run_dir)
+
+
+def test_load_run_artifacts_rejects_transformer_id_set_mismatch(
+    tmp_path: Path,
+) -> None:
+    import pandas as pd
+
+    run_dir = _fixture_run(tmp_path)
+    predictions = pd.read_parquet(run_dir / "predictions.parquet")
+    predictions = predictions[
+        predictions["transformer_id"] != predictions["transformer_id"].iloc[0]
+    ]
+    predictions.to_parquet(run_dir / "predictions.parquet")
+    _update_manifest_hash(run_dir, "predictions.parquet")
+    with pytest.raises(ArtifactLoadError, match="transformer_id"):
+        load_run_artifacts(run_dir)
+
+
+def test_load_run_artifacts_rejects_invalid_prediction_boolean_consistency(
+    tmp_path: Path,
+) -> None:
+    import pandas as pd
+
+    run_dir = _fixture_run(tmp_path)
+    predictions = pd.read_parquet(run_dir / "predictions.parquet")
+    predictions["predicted_is_mislinked"] = 1
+    predictions.to_parquet(run_dir / "predictions.parquet")
+    _update_manifest_hash(run_dir, "predictions.parquet")
+    with pytest.raises(ArtifactLoadError, match="predicted_is_mislinked"):
+        load_run_artifacts(run_dir)
+
+
 def test_load_run_artifacts_rejects_semantically_invalid_metrics(
     tmp_path: Path,
 ) -> None:
     run_dir = _fixture_run(tmp_path)
-    (run_dir / "metrics.json").write_text(
-        json.dumps(
-            {
-                "f1": "not-a-number",
-                "n_predicted": [],
-                "n_total": 1,
-                "n_actual_errors": 0,
-                "automatic_coverage": 0.0,
-                "top1_correction_rate": None,
-            }
-        ),
-        encoding="utf-8",
-    )
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    metrics["f1"] = "not-a-number"
+    metrics["n_predicted"] = []
+    (run_dir / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
     _update_manifest_hash(run_dir, "metrics.json")
     with pytest.raises(ArtifactLoadError, match="n_predicted|f1"):
         load_run_artifacts(run_dir)
