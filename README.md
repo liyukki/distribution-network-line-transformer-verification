@@ -35,7 +35,7 @@ flowchart LR
 
 ## 快速开始
 
-首次使用建议先阅读[完整使用说明](docs/user-guide.md)，其中包含安装、命令行、五个看板页面、产物字段、公开证据复现和故障排查。项目的问题定义、方法、实验结果与失效边界见[项目论文（Markdown）](paper/line-transformer-verification-paper.md)。
+首次使用建议先阅读[完整使用说明](docs/user-guide.md)，其中包含安装、命令行、五个看板页面、产物字段、公开证据复现和故障排查。项目的问题定义、方法、实验结果与失效边界见[项目论文（Markdown）](paper/line-transformer-verification-paper.md)或[排版版 PDF](paper/line-transformer-verification-paper.pdf)。
 
 Windows:
 

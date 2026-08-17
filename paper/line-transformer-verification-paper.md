@@ -320,14 +320,14 @@ python -m ltverify report \
 
 ## 参考文献
 
-1. Watson, J. D., Welch, J., & Watson, N. R. Use of Smart-Meter Data to Determine Distribution System Topology. *The Journal of Engineering*, 2016(5), 94--101, 2016. DOI: 10.1049/joe.2016.0033. [@Watson2016]
-2. Thurner, L., et al. pandapower---An Open-Source Python Tool for Convenient Modeling, Analysis, and Optimization of Electric Power Systems. *IEEE Transactions on Power Systems*, 33(6), 6510--6521, 2018. DOI: 10.1109/TPWRS.2018.2829021. [@Thurner2018]
-3. Xu, Z., et al. Distribution Network Topology Identification Using Asynchronous Transformer Monitoring Data. *IEEE Transactions on Industry Applications*, 59(1), 323--331, 2023. DOI: 10.1109/TIA.2022.3212030. [@Xu2023]
-4. de Jongh, S., et al. Data-Driven Topology and Parameter Identification in Distribution Systems With Limited Measurements. *IEEE Transactions on Power Delivery*, 40(1), 249--260, 2025. DOI: 10.1109/TPWRD.2024.3491912. [@DeJongh2025]
-5. Srinivas, V. L., & Wu, J. Topology and Parameter Identification of Distribution Network Using Smart Meter and Micro-PMU Measurements. *IEEE Transactions on Instrumentation and Measurement*, 71, 1--14, 2022. DOI: 10.1109/TIM.2022.3175043. [@Srinivas2022]
-6. Tong, L., Chai, W., & Wu, D. Topology and Impedance Identification Method of Low-Voltage Distribution Network Based on Smart Meter Measurements. *Frontiers in Energy Research*, 10, 895397, 2022. DOI: 10.3389/fenrg.2022.895397. [@Tong2022]
-7. Chen, J., Xu, X., Yan, Z., & Wang, H. Data-Driven Distribution Network Topology Identification Considering Correlated Generation Power of Distributed Energy Resource. *Frontiers in Energy*, 16(1), 121--129, 2022. DOI: 10.1007/s11708-021-0780-x. [@Chen2022]
-8. Sakoe, H., & Chiba, S. Dynamic Programming Algorithm Optimization for Spoken Word Recognition. *IEEE Transactions on Acoustics, Speech, and Signal Processing*, 26(1), 43--49, 1978. DOI: 10.1109/TASSP.1978.1163055. [@Sakoe1978]
-9. Liu, F. T., Ting, K. M., & Zhou, Z.-H. Isolation Forest. *2008 Eighth IEEE International Conference on Data Mining*, 413--422, 2008. DOI: 10.1109/ICDM.2008.17. [@Liu2008]
-10. Davis, J., & Goadrich, M. The Relationship Between Precision-Recall and ROC Curves. *Proceedings of the 23rd International Conference on Machine Learning*, 233--240, 2006. DOI: 10.1145/1143844.1143874. [@Davis2006]
-11. Saito, T., & Rehmsmeier, M. The Precision-Recall Plot Is More Informative than the ROC Plot When Evaluating Binary Classifiers on Imbalanced Datasets. *PLOS ONE*, 10(3), e0118432, 2015. DOI: 10.1371/journal.pone.0118432. [@Saito2015]
+1. Watson, J. D., Welch, J., & Watson, N. R. Use of Smart-Meter Data to Determine Distribution System Topology. *The Journal of Engineering*, 2016(5), 94--101, 2016. DOI: 10.1049/joe.2016.0033.
+2. Thurner, L., et al. pandapower---An Open-Source Python Tool for Convenient Modeling, Analysis, and Optimization of Electric Power Systems. *IEEE Transactions on Power Systems*, 33(6), 6510--6521, 2018. DOI: 10.1109/TPWRS.2018.2829021.
+3. Xu, Z., et al. Distribution Network Topology Identification Using Asynchronous Transformer Monitoring Data. *IEEE Transactions on Industry Applications*, 59(1), 323--331, 2023. DOI: 10.1109/TIA.2022.3212030.
+4. de Jongh, S., et al. Data-Driven Topology and Parameter Identification in Distribution Systems With Limited Measurements. *IEEE Transactions on Power Delivery*, 40(1), 249--260, 2025. DOI: 10.1109/TPWRD.2024.3491912.
+5. Srinivas, V. L., & Wu, J. Topology and Parameter Identification of Distribution Network Using Smart Meter and Micro-PMU Measurements. *IEEE Transactions on Instrumentation and Measurement*, 71, 1--14, 2022. DOI: 10.1109/TIM.2022.3175043.
+6. Tong, L., Chai, W., & Wu, D. Topology and Impedance Identification Method of Low-Voltage Distribution Network Based on Smart Meter Measurements. *Frontiers in Energy Research*, 10, 895397, 2022. DOI: 10.3389/fenrg.2022.895397.
+7. Chen, J., Xu, X., Yan, Z., & Wang, H. Data-Driven Distribution Network Topology Identification Considering Correlated Generation Power of Distributed Energy Resource. *Frontiers in Energy*, 16(1), 121--129, 2022. DOI: 10.1007/s11708-021-0780-x.
+8. Sakoe, H., & Chiba, S. Dynamic Programming Algorithm Optimization for Spoken Word Recognition. *IEEE Transactions on Acoustics, Speech, and Signal Processing*, 26(1), 43--49, 1978. DOI: 10.1109/TASSP.1978.1163055.
+9. Liu, F. T., Ting, K. M., & Zhou, Z.-H. Isolation Forest. *2008 Eighth IEEE International Conference on Data Mining*, 413--422, 2008. DOI: 10.1109/ICDM.2008.17.
+10. Davis, J., & Goadrich, M. The Relationship Between Precision-Recall and ROC Curves. *Proceedings of the 23rd International Conference on Machine Learning*, 233--240, 2006. DOI: 10.1145/1143844.1143874.
+11. Saito, T., & Rehmsmeier, M. The Precision-Recall Plot Is More Informative than the ROC Plot When Evaluating Binary Classifiers on Imbalanced Datasets. *PLOS ONE*, 10(3), e0118432, 2015. DOI: 10.1371/journal.pone.0118432.

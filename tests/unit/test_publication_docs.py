@@ -199,3 +199,24 @@ def test_generate_paper_figures_does_not_mutate_evidence(tmp_path: Path) -> None
     assert {path.name for path in generated} == set(REQUIRED_FIGURES)
     assert all(path.is_file() and path.stat().st_size > 10_000 for path in generated)
     assert {path: _digest(path) for path in sources} == before
+
+
+def test_build_paper_pdf_has_a4_pages_and_extractable_sections(tmp_path: Path) -> None:
+    import pdfplumber
+    from pypdf import PdfReader
+
+    from scripts.build_paper import build_pdf
+
+    output = build_pdf(PAPER, tmp_path / "paper.pdf")
+    reader = PdfReader(output)
+    assert len(reader.pages) > 5
+    for page in reader.pages:
+        width = float(page.mediabox.width)
+        height = float(page.mediabox.height)
+        assert width == pytest.approx(595.276, abs=2)
+        assert height == pytest.approx(841.89, abs=2)
+    with pdfplumber.open(output) as document:
+        text = "\n".join(page.extract_text() or "" for page in document.pages)
+    for expected in ("配电网线变关系智能校验", "摘要", "实验结果", "讨论与局限", "参考文献"):
+        assert expected in text
+    assert "第 1 页" in text
