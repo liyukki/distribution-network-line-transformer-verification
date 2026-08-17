@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from hashlib import sha256
 from pathlib import Path
@@ -107,6 +108,52 @@ def test_bibliography_contains_verifiable_dois() -> None:
     dois = re.findall(r"doi\s*=\s*[{\"]([^}\"]+)", bibliography, re.IGNORECASE)
     assert len(dois) >= 6
     assert all(doi.startswith("10.") for doi in dois)
+
+
+def test_paper_contains_method_equations_and_evidence_boundaries() -> None:
+    paper = _read_required(PAPER)
+    for token in (
+        "z_{i,t}",
+        "r_{xy}",
+        "S(i,f)",
+        "current_score_threshold",
+        "margin_threshold",
+        "same_feeder_residual_corr_mean",
+        "cross_feeder_residual_corr_mean",
+    ):
+        assert token in paper
+    assert "0.167" in paper and "0.378" in paper
+    assert "不代表真实电网" in paper
+    assert "尚未实现" in paper
+
+
+def test_every_bibliography_entry_is_cited() -> None:
+    paper = _read_required(PAPER)
+    bibliography = _read_required(BIBLIOGRAPHY)
+    keys = set(re.findall(r"@\w+\{([^,]+),", bibliography))
+    citations = set(re.findall(r"\[@([A-Za-z0-9_:-]+)\]", paper))
+    assert len(keys) >= 10
+    assert citations == keys
+
+
+def test_paper_headline_numbers_match_public_summary() -> None:
+    paper = _read_required(PAPER)
+    summary = json.loads(
+        (ROOT / "reports/metrics/default_summary.json").read_text(encoding="utf-8")
+    )
+    metrics = summary["metrics"]
+    expected = (
+        f"F1 仅为 {metrics['f1']:.3f}",
+        f"PR-AUC 为 {metrics['pr_auc']:.3f}",
+        (
+            f"Top-1/Top-2 修正率为 {metrics['top1_correction_rate']:.3f}/"
+            f"{metrics['top2_correction_rate']:.3f}"
+        ),
+        f"同馈线残差相关均值为 {summary['failure_boundary']['same_feeder_residual_corr_mean']:.3f}",
+        f"跨馈线均值为 {summary['failure_boundary']['cross_feeder_residual_corr_mean']:.3f}",
+    )
+    for claim in expected:
+        assert claim in paper
 
 
 def test_publication_sources_do_not_make_prohibited_claims() -> None:
