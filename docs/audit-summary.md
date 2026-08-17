@@ -11,7 +11,7 @@
 - **Current schema**：主看板磁盘入口只接受 current schema-v2 的 completed 运行；旧版、未来版和非法版在加载前拒绝。
 - **Verify-before-parse**：首页在读取任何 CSV/Parquet/metrics 前，先验证 manifest 声明、哈希和普通文件契约。
 - **Dashboard artifact binding**：首页实际读取的每个文件都必须属于 manifest 声明的权威集合；删除声明不能绕过校验。
-- **Cross-artifact semantic binding**：loader 在返回前还会校验 truth/ledger/predictions/metrics/confusion matrix 之间的 ID、计数、coverage 与 precision/recall/F1 一致性。
+- **Cross-artifact semantic binding**：loader 在返回前校验 truth/ledger/predictions/candidate_features/metrics/confusion matrix 的 ID 与重复台账字段，并使用哈希闭环内的 config.snapshot.yaml 重算 PR-AUC、Top-k、coverage、计数及 Precision/Recall/F1；展示指标与重算结果不一致时拒绝加载。
 - **Public default evidence bundle**：`reports/evidence/default_run/` 包含一份已通过 manifest 校验的合成默认运行，全新 clone 无需访问本机 ignored `runs/` 即可逐字节复现规范报告。
 
 ## 典型修复案例
@@ -20,6 +20,7 @@
 - **NaN 排名**：Top-k 排名会排除 NaN 与正负无穷候选，避免非有限分数参与推荐。
 - **证据可复现**：默认报告与清单可由固定命令逐字节复现；实验清单支持严格源配置交叉核验。
 - **Dashboard artifact binding**：修复了“清单只校验声明文件，但页面读取未声明文件”的绕过路径，使展示数据与验证数据一致。
+- **评价指标语义绑定**：修复了同步修改 metrics.json 与 manifest 哈希后可伪造 PR-AUC、Top-k 修正率或候选馈线数量的问题；评估页的 PR 曲线标签改为由台账与物理真值生成。
 
 ## 最终测试与证据状态
 
