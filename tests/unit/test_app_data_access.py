@@ -399,6 +399,42 @@ def test_load_run_artifacts_rejects_invalid_applicability_metadata(
 @pytest.mark.parametrize(
     "mutator",
     [
+        lambda m: m.update({"top1_evaluated_count": m["n_actual_errors"] + 1}),
+        lambda m: m.update({"top1_evaluation_coverage": 1.0}),
+        lambda m: m.update(
+            {
+                "candidate_feeder_count": 1,
+                "topk_applicable": {"top1": True, "top2": False, "top3": False},
+                "top2_evaluated_count": 0,
+                "top2_evaluation_coverage": None,
+                "top2_correction_rate": None,
+                "top3_evaluated_count": 0,
+                "top3_evaluation_coverage": None,
+                "top3_correction_rate": None,
+            }
+        ),
+        lambda m: m.update(
+            {"top1_evaluated_count": 0, "top1_correction_rate": 0.5}
+        ),
+    ],
+)
+def test_loader_rejects_inconsistent_topk_metadata(
+    tmp_path: Path,
+    mutator: object,
+) -> None:
+    run_dir = _fixture_run(tmp_path)
+    metrics_path = run_dir / "metrics.json"
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    mutator(metrics)
+    metrics_path.write_text(json.dumps(metrics), encoding="utf-8")
+    _update_manifest_hash(run_dir, "metrics.json")
+    with pytest.raises(ArtifactLoadError, match="top1|Top-1|applicable|coverage"):
+        load_run_artifacts(run_dir)
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
         lambda m: m.update({"n_actual_correct": True}),
         lambda m: m.update({"n_actual_correct": -1}),
         lambda m: m.update({"n_actual_correct": 1.5}),

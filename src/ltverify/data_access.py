@@ -224,29 +224,16 @@ def _validate_metrics(metrics: dict[str, object]) -> None:
     for key in ("top1", "top2", "top3"):
         if not isinstance(topk[key], bool):
             raise ArtifactLoadError(f"topk_applicable.{key} 必须是 bool")
-        rate_key = f"{key}_correction_rate"
-        coverage_key = f"{key}_evaluation_coverage"
-        count_key = f"{key}_evaluated_count"
-        rate = _require_nullable_ratio_metric(metrics, rate_key)
-        coverage = _require_nullable_ratio_metric(metrics, coverage_key)
-        count = _require_count_metric(metrics, count_key, positive=False)
-        if not topk[key]:
-            if rate is not None or coverage is not None or count != 0:
-                raise ArtifactLoadError(
-                    f"{key} 不适用时 rate/coverage 必须为 null 且 evaluated_count 为 0"
-                )
-        else:
-            if coverage is None:
-                raise ArtifactLoadError(f"{key} 适用时 evaluation_coverage 不能为 null")
-            if rate is None and count != 0:
-                raise ArtifactLoadError(
-                    f"{key} 适用且 evaluated_count>0 时 correction_rate 不能为 null"
-                )
 
     n_total = _require_count_metric(metrics, "n_total", positive=True)
     n_predicted = _require_count_metric(metrics, "n_predicted", positive=False)
     n_actual_errors = _require_count_metric(metrics, "n_actual_errors", positive=False)
     n_actual_correct = _require_count_metric(metrics, "n_actual_correct", positive=False)
+    candidate_feeder_count = _require_count_metric(
+        metrics,
+        "candidate_feeder_count",
+        positive=True,
+    )
     if n_predicted > n_total:
         raise ArtifactLoadError("metrics.n_predicted 不能大于 n_total")
     if n_actual_errors > n_total or n_actual_correct > n_total:
@@ -254,9 +241,63 @@ def _validate_metrics(metrics: dict[str, object]) -> None:
     if n_actual_errors + n_actual_correct != n_total:
         raise ArtifactLoadError("metrics.n_actual_errors + n_actual_correct 必须等于 n_total")
 
-    for key in ("excluded_candidate_count",):
-        _require_count_metric(metrics, key, positive=False)
-    _require_count_metric(metrics, "candidate_feeder_count", positive=True)
+    _require_count_metric(metrics, "excluded_candidate_count", positive=False)
+
+    for key in ("top1", "top2", "top3"):
+        rate_key = f"{key}_correction_rate"
+        coverage_key = f"{key}_evaluation_coverage"
+        count_key = f"{key}_evaluated_count"
+        rate = _require_nullable_ratio_metric(metrics, rate_key)
+        coverage = _require_nullable_ratio_metric(metrics, coverage_key)
+        count = _require_count_metric(metrics, count_key, positive=False)
+
+        expected_applicable = candidate_feeder_count > int(key[-1])
+        if topk[key] != expected_applicable:
+            raise ArtifactLoadError(
+                f"{key} 适用性不一致: topk_applicable.{key}={topk[key]}，"
+                f"candidate_feeder_count={candidate_feeder_count} 要求 "
+                f"applicable={expected_applicable}"
+            )
+
+        if not topk[key]:
+            if rate is not None or coverage is not None or count != 0:
+                raise ArtifactLoadError(
+                    f"{key} 不适用时 rate/coverage 必须为 null 且 evaluated_count 为 0"
+                )
+            continue
+
+        if n_actual_errors == 0:
+            if count != 0 or rate is not None or coverage is not None:
+                raise ArtifactLoadError(
+                    f"{key} 适用且无实际错误时 evaluated_count 必须为 0，"
+                    "rate/coverage 必须为 null"
+                )
+            continue
+
+        if count > n_actual_errors:
+            raise ArtifactLoadError(
+                f"metrics.{count_key} 不能大于 metrics.n_actual_errors"
+            )
+        expected_coverage = count / n_actual_errors
+        if coverage is None or not math.isclose(
+            coverage,
+            expected_coverage,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            raise ArtifactLoadError(
+                f"metrics.{coverage_key} 必须等于 "
+                f"{count_key}/n_actual_errors = {expected_coverage}"
+            )
+        if count == 0:
+            if rate is not None:
+                raise ArtifactLoadError(
+                    f"{key} 适用且 evaluated_count=0 时 correction_rate 必须为 null"
+                )
+        elif rate is None:
+            raise ArtifactLoadError(
+                f"{key} 适用且 evaluated_count>0 时 correction_rate 不能为 null"
+            )
 
     scored_coverage = _require_ratio_metric(metrics, "scored_coverage")
     insufficient_data_rate = _require_ratio_metric(metrics, "insufficient_data_rate")
