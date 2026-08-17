@@ -37,6 +37,27 @@ def test_streamlit_app_loads_run_without_errors(monkeypatch) -> None:
     assert "线变关系智能校验" in titles
 
 
+def test_streamlit_defaults_to_chinese_and_switches_to_english(monkeypatch) -> None:
+    run_dir = run_pipeline(Path("tests/fixtures/small_config.yaml"))
+    monkeypatch.setenv("LTVERIFY_RUN_DIR", str(run_dir.resolve()))
+    app_test = AppTest.from_file(ROOT / "app" / "streamlit_app.py", default_timeout=120)
+
+    app_test.run()
+    assert len(app_test.exception) == 0
+    assert app_test.selectbox[0].value == "zh-CN"
+    assert app_test.selectbox[0].options == ["简体中文", "English"]
+    assert "线变关系智能校验看板" in [element.value for element in app_test.title]
+
+    app_test.selectbox[0].select("English").run()
+    assert len(app_test.exception) == 0
+    assert app_test.session_state["locale"] == "en-US"
+    assert "Line-transformer relationship verification dashboard" in [
+        element.value for element in app_test.title
+    ]
+    assert "Predicted alerts" in [element.label for element in app_test.metric]
+    assert app_test.text_input[0].label == "Run directory"
+
+
 def test_streamlit_rejects_tampered_metrics(monkeypatch) -> None:
     run_dir = run_pipeline(Path("tests/fixtures/small_config.yaml"))
     (run_dir / "metrics.json").write_text(

@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 
@@ -9,9 +10,17 @@ from ltverify.data_access import (
     discover_completed_run_dir,
     load_run_artifacts,
 )
+from ltverify.i18n import (
+    DEFAULT_LOCALE,
+    SUPPORTED_LOCALES,
+    normalize_locale,
+    translate,
+    translate_value,
+)
 
-st.set_page_config(page_title="线变关系智能校验", layout="wide")
-st.title("线变关系智能校验看板")
+LOGGER = logging.getLogger(__name__)
+initial_locale = normalize_locale(st.session_state.get("locale", DEFAULT_LOCALE))
+st.set_page_config(page_title=translate(initial_locale, "app.title"), layout="wide")
 
 
 def _default_run_dir() -> str:
@@ -22,15 +31,22 @@ def _default_run_dir() -> str:
 
 
 with st.sidebar:
-    run_dir = st.text_input("运行目录", value=_default_run_dir())
-    demo_mode = st.toggle("演示评价模式", value=False)
-    st.caption("演示评价模式下才显示物理真值与真实标签。")
+    locale = st.selectbox(
+        translate(initial_locale, "app.language"),
+        options=SUPPORTED_LOCALES,
+        index=SUPPORTED_LOCALES.index(initial_locale),
+        format_func=lambda option: translate(option, f"language.{option}"),
+        key="locale",
+    )
+    locale = normalize_locale(locale)
+    run_dir = st.text_input(translate(locale, "app.run_directory"), value=_default_run_dir())
+    demo_mode = st.toggle(translate(locale, "app.demo_mode"), value=False)
+    st.caption(translate(locale, "app.demo_caption"))
+
+st.title(translate(locale, "app.title"))
 
 if not run_dir:
-    st.info(
-        "请先运行 python -m ltverify run-all --config configs/default.yaml，"
-        "然后在左侧填写运行目录。"
-    )
+    st.info(translate(locale, "app.missing_run"))
     st.stop()
 
 
@@ -41,7 +57,11 @@ def _load_run(directory: str) -> RunArtifacts:
 try:
     artifacts = _load_run(run_dir)
 except ArtifactLoadError as exc:
-    st.error(str(exc))
+    LOGGER.warning("Artifact loading failed: %s", exc)
+    if locale == "zh-CN":
+        st.error(translate(locale, "app.artifact_load_failed", detail=str(exc)))
+    else:
+        st.error(translate(locale, "app.artifact_load_failed_generic"))
     st.stop()
 
 st.session_state["artifacts"] = artifacts
@@ -53,26 +73,32 @@ metrics = artifacts.metrics
 def _metric_text(key: str) -> str:
     value = metrics.get(key)
     if value is None:
-        return "n/a"
+        return translate(locale, "not_applicable")
     return f"{float(value):.3f}"
 
 
 columns = st.columns(5)
-columns[0].metric("预测告警数", int(metrics.get("n_predicted", 0)))
+columns[0].metric(translate(locale, "app.predicted_alerts"), int(metrics.get("n_predicted", 0)))
 columns[1].metric("F1", _metric_text("f1"))
-columns[2].metric("Top-1 修正率", _metric_text("top1_correction_rate"))
-columns[3].metric("自动推荐覆盖率", _metric_text("automatic_coverage"))
-columns[4].metric("运行状态", str(artifacts.manifest.get("status", "unknown")))
+columns[2].metric(translate(locale, "app.top1_rate"), _metric_text("top1_correction_rate"))
+columns[3].metric(translate(locale, "app.automatic_coverage"), _metric_text("automatic_coverage"))
+columns[4].metric(
+    translate(locale, "app.run_status"),
+    str(translate_value(locale, "status", artifacts.manifest.get("status", "unknown"))),
+)
 run_label = artifacts.run_dir.name
-st.caption(f"运行标识: {run_label}；清单 SHA-256 哈希一致性已校验（非数字签名）")
+st.caption(
+    f"{translate(locale, 'app.run_identifier', run_id=run_label)}；"
+    f"{translate(locale, 'app.hash_verified')}"
+)
 
 pages = st.navigation(
     [
-        st.Page("pages/1_network.py", title="网络拓扑"),
-        st.Page("pages/2_diagnosis.py", title="配变诊断"),
-        st.Page("pages/3_similarity.py", title="相似度矩阵"),
-        st.Page("pages/4_evaluation.py", title="模型评估"),
-        st.Page("pages/5_robustness.py", title="鲁棒性实验"),
+        st.Page("pages/1_network.py", title=translate(locale, "nav.network")),
+        st.Page("pages/2_diagnosis.py", title=translate(locale, "nav.diagnosis")),
+        st.Page("pages/3_similarity.py", title=translate(locale, "nav.similarity")),
+        st.Page("pages/4_evaluation.py", title=translate(locale, "nav.evaluation")),
+        st.Page("pages/5_robustness.py", title=translate(locale, "nav.robustness")),
     ]
 )
 pages.run()

@@ -132,7 +132,7 @@ _EN = {
     "language.en-US": "English",
     "failed_case_count": "{count} failed cases found",
     "not_applicable": "N/A",
-    "app.title": "Line-transformer relationship verification",
+    "app.title": "Line-transformer relationship verification dashboard",
     "app.language": "Interface language",
     "app.run_directory": "Run directory",
     "app.demo_mode": "Evaluation demo mode",
