@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
@@ -153,6 +154,66 @@ def test_data_pages_render_without_exceptions(run_dir: Path) -> None:
         app_test.run()
         raised = [element.value for element in app_test.exception]
         assert len(app_test.exception) == 0, f"{page} raised: {raised}"
+
+
+def test_evaluation_page_uses_ledger_truth_labels(
+    run_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifacts = load_run_artifacts(run_dir)
+    predictions = artifacts.predictions.copy()
+    predictions["reported_feeder_id"] = "F99"
+    target = RunArtifacts(
+        run_dir=artifacts.run_dir,
+        manifest=dict(artifacts.manifest),
+        truth=artifacts.truth,
+        ledger=artifacts.ledger,
+        observed_measurements=artifacts.observed_measurements,
+        feeder_measurements=artifacts.feeder_measurements,
+        candidate_features=artifacts.candidate_features,
+        predictions=predictions,
+        metrics=dict(artifacts.metrics),
+        confusion_matrix=artifacts.confusion_matrix,
+        network_nodes=artifacts.network_nodes,
+        network_edges=artifacts.network_edges,
+    )
+    expected = artifacts.ledger[["transformer_id", "reported_feeder_id"]].merge(
+        artifacts.truth[["transformer_id", "physical_feeder_id"]],
+        on="transformer_id",
+        how="inner",
+        validate="one_to_one",
+    )
+    expected_labels = (
+        (expected["reported_feeder_id"] != expected["physical_feeder_id"]).astype(int).tolist()
+    )
+    captured: dict[str, object] = {}
+
+    def capture_curve(
+        y_true: object,
+        scores: object,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        captured["y_true"] = list(y_true)
+        captured["scores"] = list(scores)
+        return (
+            np.array([1.0, 0.5]),
+            np.array([0.0, 1.0]),
+            np.array([0.5]),
+        )
+
+    monkeypatch.setattr(
+        "sklearn.metrics.precision_recall_curve",
+        capture_curve,
+    )
+    app_test = AppTest.from_file(
+        ROOT / "app" / "pages" / "4_evaluation.py",
+        default_timeout=120,
+    )
+    app_test.session_state["artifacts"] = target
+    app_test.session_state["demo_mode"] = True
+    app_test.run()
+
+    assert len(app_test.exception) == 0
+    assert captured["y_true"] == expected_labels
 
 
 def test_robustness_page_renders_with_tmp_aggregates(tmp_path: Path) -> None:

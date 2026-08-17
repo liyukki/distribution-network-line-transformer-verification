@@ -70,22 +70,27 @@ st.caption(
 )
 
 if st.session_state.get("demo_mode"):
-    required_pr_columns = {
-        "transformer_id",
-        "reported_feeder_id",
-        "physical_feeder_id",
-        "anomaly_score",
-    }
     pr_supported = (
         schema_state == "current"
-        and "anomaly_score" in artifacts.predictions.columns
-        and required_pr_columns <= set(artifacts.predictions.columns) | set(artifacts.truth.columns)
+        and {"transformer_id", "anomaly_score"} <= set(artifacts.predictions.columns)
+        and {"transformer_id", "reported_feeder_id"} <= set(artifacts.ledger.columns)
+        and {"transformer_id", "physical_feeder_id"} <= set(artifacts.truth.columns)
     )
     if not pr_supported:
         st.info("该运行目录不绘制 PR 曲线（旧版或未验证的 schema）。")
     else:
-        truth = artifacts.truth.set_index("transformer_id")
-        merged = artifacts.predictions.join(truth, on="transformer_id")
+        labels = artifacts.ledger[["transformer_id", "reported_feeder_id"]].merge(
+            artifacts.truth[["transformer_id", "physical_feeder_id"]],
+            on="transformer_id",
+            how="inner",
+            validate="one_to_one",
+        )
+        merged = labels.merge(
+            artifacts.predictions[["transformer_id", "anomaly_score"]],
+            on="transformer_id",
+            how="inner",
+            validate="one_to_one",
+        )
         y_true = (merged["reported_feeder_id"] != merged["physical_feeder_id"]).astype(int)
         scores = merged["anomaly_score"].fillna(0.0).to_numpy(dtype=float)
         precision, recall, _ = precision_recall_curve(y_true, scores)

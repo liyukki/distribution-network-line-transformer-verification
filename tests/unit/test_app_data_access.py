@@ -2,6 +2,7 @@ import json
 import shutil
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from ltverify.data_access import (
@@ -12,6 +13,8 @@ from ltverify.data_access import (
 )
 from ltverify.manifest import file_sha256
 from ltverify.pipeline import run_pipeline
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _fixture_run(
@@ -65,6 +68,21 @@ def _update_manifest_hash(run_dir: Path, name: str) -> None:
     )
 
 
+def _write_metrics_and_rehash(run_dir: Path, metrics: dict[str, object]) -> None:
+    metrics_path = run_dir / "metrics.json"
+    metrics_path.write_text(
+        json.dumps(metrics, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    _update_manifest_hash(run_dir, "metrics.json")
+
+
+def _public_evidence_run(tmp_path: Path) -> Path:
+    run_dir = tmp_path / "public-evidence-run"
+    shutil.copytree(ROOT / "reports" / "evidence" / "default_run", run_dir)
+    return run_dir
+
+
 def test_load_run_artifacts_reads_all_artifacts(tmp_path: Path) -> None:
     run_dir = _fixture_run(tmp_path)
     artifacts = load_run_artifacts(run_dir)
@@ -83,9 +101,115 @@ def test_load_run_artifacts_accepts_valid_zero_error_run(tmp_path: Path) -> None
     assert metrics["top1_correction_rate"] is None
     assert metrics["top1_evaluation_coverage"] is None
     assert metrics["top1_evaluated_count"] == 0
+    assert metrics["pr_auc"] is None
+    assert metrics["pr_auc_applicable"] is False
+    assert metrics["pr_auc_unavailable_reason"] == "single_class_all_negative"
+    assert metrics["pr_auc_scored"] is None
+    assert metrics["pr_auc_scored_applicable"] is False
+    assert isinstance(metrics["pr_auc_scored_unavailable_reason"], str)
 
     artifacts = load_run_artifacts(run_dir)
     assert artifacts.metrics["n_actual_errors"] == 0
+
+
+def test_loader_rejects_reported_feeder_drift_with_valid_hash(tmp_path: Path) -> None:
+    run_dir = _fixture_run(tmp_path)
+    predictions_path = run_dir / "predictions.parquet"
+    candidates_path = run_dir / "candidate_features.parquet"
+    predictions = pd.read_parquet(predictions_path)
+    candidates = pd.read_parquet(candidates_path)
+    ledger = pd.read_csv(run_dir / "reported_ledger.csv").set_index("transformer_id")
+    transformer_id = str(predictions.iloc[0]["transformer_id"])
+    reported = str(ledger.loc[transformer_id, "reported_feeder_id"])
+    replacement = "F99" if reported != "F99" else "F98"
+    predictions.loc[
+        predictions["transformer_id"] == transformer_id,
+        "reported_feeder_id",
+    ] = replacement
+    candidates.loc[
+        candidates["transformer_id"] == transformer_id,
+        "reported_feeder_id",
+    ] = replacement
+    predictions.to_parquet(predictions_path, index=False)
+    candidates.to_parquet(candidates_path, index=False)
+    _update_manifest_hash(run_dir, "predictions.parquet")
+    _update_manifest_hash(run_dir, "candidate_features.parquet")
+
+    with pytest.raises(ArtifactLoadError, match="reported_feeder_id|ledger|台账"):
+        load_run_artifacts(run_dir)
+
+
+@pytest.mark.parametrize("field", ["pr_auc", "pr_auc_scored"])
+def test_loader_rejects_forged_pr_auc_with_valid_hash(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    run_dir = _public_evidence_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics[f"{field}_applicable"] is True
+    original = float(metrics[field])
+    metrics[field] = 0.0 if original != 0.0 else 1.0
+    _write_metrics_and_rehash(run_dir, metrics)
+
+    with pytest.raises(ArtifactLoadError, match=field):
+        load_run_artifacts(run_dir)
+
+
+def test_loader_rejects_plausible_forged_top1_rate(tmp_path: Path) -> None:
+    run_dir = _public_evidence_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["top1_evaluated_count"] > 0
+    original = float(metrics["top1_correction_rate"])
+    metrics["top1_correction_rate"] = 0.0 if original != 0.0 else 1.0
+    _write_metrics_and_rehash(run_dir, metrics)
+
+    with pytest.raises(ArtifactLoadError, match="top1_correction_rate|top1"):
+        load_run_artifacts(run_dir)
+
+
+def test_loader_rejects_candidate_count_not_bound_to_features(tmp_path: Path) -> None:
+    run_dir = _public_evidence_run(tmp_path)
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["candidate_feeder_count"] == 3
+    metrics["candidate_feeder_count"] = 4
+    metrics["topk_applicable"] = {"top1": True, "top2": True, "top3": True}
+    metrics["top3_evaluated_count"] = 0
+    metrics["top3_evaluation_coverage"] = 0.0
+    metrics["top3_correction_rate"] = None
+    _write_metrics_and_rehash(run_dir, metrics)
+
+    with pytest.raises(ArtifactLoadError, match="candidate_feeder_count|candidate"):
+        load_run_artifacts(run_dir)
+
+
+def test_loader_wraps_list_candidate_feeder_as_domain_error(tmp_path: Path) -> None:
+    run_dir = _fixture_run(tmp_path)
+    path = run_dir / "candidate_features.parquet"
+    frame = pd.read_parquet(path)
+    frame["candidate_feeder_id"] = [[str(value)] for value in frame["candidate_feeder_id"]]
+    frame.to_parquet(path, index=False)
+    _update_manifest_hash(run_dir, "candidate_features.parquet")
+
+    with pytest.raises(ArtifactLoadError, match="candidate_feeder_id"):
+        load_run_artifacts(run_dir)
+
+
+def test_loader_rejects_malformed_verified_config_snapshot(tmp_path: Path) -> None:
+    run_dir = _fixture_run(tmp_path)
+    config_path = run_dir / "config.snapshot.yaml"
+    config_path.write_text("scoring: [", encoding="utf-8")
+    config_sha256 = file_sha256(config_path)
+    manifest_path = run_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["output_sha256"]["config.snapshot.yaml"] = config_sha256
+    manifest["config_sha256"] = config_sha256
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ArtifactLoadError, match="config.snapshot.yaml"):
+        load_run_artifacts(run_dir)
 
 
 def test_missing_predictions_raises_with_path_and_command(tmp_path: Path) -> None:

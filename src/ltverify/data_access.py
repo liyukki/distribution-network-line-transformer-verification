@@ -9,7 +9,10 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from pydantic import ValidationError
+from yaml import YAMLError
 
+from ltverify.config import load_config
 from ltverify.contracts import (
     FEEDER_MEASUREMENT_COLUMNS,
     LEDGER_COLUMNS,
@@ -18,6 +21,7 @@ from ltverify.contracts import (
     DataContractError,
     validate_columns,
 )
+from ltverify.evaluation import evaluate_predictions
 from ltverify.features import FEATURE_COLUMNS
 from ltverify.io import read_json
 from ltverify.manifest import (
@@ -62,6 +66,40 @@ DASHBOARD_ARTIFACT_FILES = {
 }
 
 REQUIRED_DASHBOARD_ARTIFACTS = frozenset(DASHBOARD_ARTIFACT_FILES.values())
+DASHBOARD_FEATURE_COLUMNS = frozenset(FEATURE_COLUMNS) | {
+    "enhanced_score",
+    "available_feature_weight",
+}
+EVALUATION_METRIC_KEYS = (
+    "precision",
+    "recall",
+    "f1",
+    "pr_auc",
+    "pr_auc_applicable",
+    "pr_auc_unavailable_reason",
+    "pr_auc_scored",
+    "pr_auc_scored_applicable",
+    "pr_auc_scored_unavailable_reason",
+    "top1_correction_rate",
+    "top1_evaluated_count",
+    "top1_evaluation_coverage",
+    "top2_correction_rate",
+    "top2_evaluated_count",
+    "top2_evaluation_coverage",
+    "top3_correction_rate",
+    "top3_evaluated_count",
+    "top3_evaluation_coverage",
+    "topk_applicable",
+    "excluded_candidate_count",
+    "candidate_feeder_count",
+    "n_total",
+    "n_actual_errors",
+    "n_actual_correct",
+    "n_predicted",
+    "automatic_coverage",
+    "insufficient_data_rate",
+    "scored_coverage",
+)
 
 NETWORK_NODE_COLUMNS = frozenset({"node_id", "voltage_kv"})
 NETWORK_EDGE_COLUMNS = frozenset({"from_node", "to_node", "feeder_id"})
@@ -339,9 +377,50 @@ def _validate_transformer_identity_contracts(
             raise ArtifactLoadError(f"{name} 的 transformer_id 存在重复")
     _require_nonempty_string_series(truth, "physical_feeder_id", "truth_topology.csv")
     _require_nonempty_string_series(ledger, "reported_feeder_id", "reported_ledger.csv")
+    _require_nonempty_string_series(
+        predictions,
+        "reported_feeder_id",
+        "predictions.parquet",
+    )
     ids = [set(frame["transformer_id"]) for frame in (truth, ledger, predictions)]
     if not all(item == ids[0] for item in ids[1:]):
         raise ArtifactLoadError("truth/ledger/predictions 的 transformer_id 集合不一致")
+    ledger_reported = ledger.set_index("transformer_id")["reported_feeder_id"].sort_index()
+    prediction_reported = predictions.set_index("transformer_id")["reported_feeder_id"].sort_index()
+    if not prediction_reported.equals(ledger_reported):
+        raise ArtifactLoadError("predictions.reported_feeder_id 与 reported_ledger.csv 台账不一致")
+
+
+def _validate_candidate_identity_contracts(
+    candidate_features: pd.DataFrame,
+    predictions: pd.DataFrame,
+) -> None:
+    for column in ("transformer_id", "reported_feeder_id", "candidate_feeder_id"):
+        _require_nonempty_string_series(
+            candidate_features,
+            column,
+            "candidate_features.parquet",
+        )
+    candidate_ids = set(candidate_features["transformer_id"])
+    prediction_ids = set(predictions["transformer_id"])
+    if candidate_ids != prediction_ids:
+        raise ArtifactLoadError("candidate_features/predictions 的 transformer_id 集合不一致")
+    duplicate_key = candidate_features.duplicated(subset=["transformer_id", "candidate_feeder_id"])
+    if duplicate_key.any():
+        raise ArtifactLoadError(
+            "candidate_features 的 transformer_id/candidate_feeder_id 组合存在重复"
+        )
+    candidate_reported = candidate_features[["transformer_id", "reported_feeder_id"]].merge(
+        predictions[["transformer_id", "reported_feeder_id"]],
+        on="transformer_id",
+        how="left",
+        suffixes=("_candidate", "_prediction"),
+        validate="many_to_one",
+    )
+    if not candidate_reported["reported_feeder_id_candidate"].equals(
+        candidate_reported["reported_feeder_id_prediction"]
+    ):
+        raise ArtifactLoadError("candidate_features.reported_feeder_id 与 predictions 不一致")
 
 
 def _validate_prediction_metric_consistency(
@@ -453,6 +532,57 @@ def _validate_evaluation_consistency(
             raise ArtifactLoadError(f"confusion matrix 派生的 {key} 与 metrics 不一致")
 
 
+def _metric_values_equal(actual: object, expected: object) -> bool:
+    if actual is None or expected is None:
+        return actual is expected
+    if isinstance(actual, bool) or isinstance(expected, bool):
+        return type(actual) is bool and type(expected) is bool and actual == expected
+    if isinstance(actual, dict) or isinstance(expected, dict):
+        if not isinstance(actual, dict) or not isinstance(expected, dict):
+            return False
+        if set(actual) != set(expected):
+            return False
+        return all(_metric_values_equal(actual[key], expected[key]) for key in expected)
+    if isinstance(actual, Real) or isinstance(expected, Real):
+        if not isinstance(actual, Real) or not isinstance(expected, Real):
+            return False
+        return math.isclose(
+            float(actual),
+            float(expected),
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        )
+    return type(actual) is type(expected) and actual == expected
+
+
+def _validate_recomputed_evaluation(
+    *,
+    truth: pd.DataFrame,
+    ledger: pd.DataFrame,
+    predictions: pd.DataFrame,
+    candidate_features: pd.DataFrame,
+    metrics: dict[str, object],
+    evidence_weight_threshold: float,
+) -> None:
+    try:
+        recomputed = evaluate_predictions(
+            predictions=predictions,
+            truth=truth,
+            ledger=ledger,
+            candidate_scores=candidate_features,
+            evidence_weight_threshold=evidence_weight_threshold,
+        ).metrics
+    except (ValueError, TypeError, KeyError, IndexError) as exc:
+        raise ArtifactLoadError(f"无法从权威产物重算评价指标: {exc}") from exc
+    for key in EVALUATION_METRIC_KEYS:
+        if key not in metrics:
+            raise ArtifactLoadError(f"metrics 缺少必填字段: {key}")
+        if not _metric_values_equal(metrics[key], recomputed[key]):
+            raise ArtifactLoadError(
+                f"metrics.{key} 与 truth/ledger/predictions/candidate_features 重算结果不一致"
+            )
+
+
 def _validate_dashboard_contracts(
     *,
     truth: pd.DataFrame,
@@ -465,6 +595,7 @@ def _validate_dashboard_contracts(
     confusion_matrix: pd.DataFrame,
     network_nodes: pd.DataFrame,
     network_edges: pd.DataFrame,
+    evidence_weight_threshold: float,
 ) -> None:
     try:
         validate_columns(truth, TRUTH_COLUMNS, "truth_topology.csv")
@@ -481,7 +612,7 @@ def _validate_dashboard_contracts(
         )
         validate_columns(
             candidate_features,
-            FEATURE_COLUMNS,
+            DASHBOARD_FEATURE_COLUMNS,
             "candidate_features.parquet",
         )
         validate_columns(predictions, PREDICTION_COLUMNS, "predictions.parquet")
@@ -505,8 +636,17 @@ def _validate_dashboard_contracts(
         raise ArtifactLoadError("confusion_matrix.csv 必须是 2×2 数值矩阵")
 
     _validate_transformer_identity_contracts(truth, ledger, predictions)
+    _validate_candidate_identity_contracts(candidate_features, predictions)
     _validate_prediction_metric_consistency(predictions, metrics)
     _validate_evaluation_consistency(truth, ledger, confusion_matrix, metrics)
+    _validate_recomputed_evaluation(
+        truth=truth,
+        ledger=ledger,
+        predictions=predictions,
+        candidate_features=candidate_features,
+        metrics=metrics,
+        evidence_weight_threshold=evidence_weight_threshold,
+    )
 
 
 def discover_completed_run_dir(runs_root: Path = Path("runs")) -> str:
@@ -595,6 +735,11 @@ def load_run_artifacts(run_dir: Path) -> RunArtifacts:
     except (ValueError, TypeError, OSError, UnicodeError) as exc:
         raise ArtifactLoadError(f"运行清单哈希一致性校验失败: {exc}；{_REPAIR_HINT}") from exc
 
+    try:
+        config = load_config(run_dir / "config.snapshot.yaml")
+    except (OSError, UnicodeError, YAMLError, ValidationError, ValueError, TypeError) as exc:
+        raise ArtifactLoadError(f"无法解析 config.snapshot.yaml: {exc}") from exc
+
     def read(name: str) -> pd.DataFrame:
         return _read_frame(run_dir, name)
 
@@ -620,6 +765,7 @@ def load_run_artifacts(run_dir: Path) -> RunArtifacts:
         confusion_matrix=confusion_matrix,
         network_nodes=network_nodes,
         network_edges=network_edges,
+        evidence_weight_threshold=config.scoring.evidence_weight_threshold,
     )
 
     return RunArtifacts(
