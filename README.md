@@ -95,6 +95,8 @@ Linux/macOS:
 .venv/bin/python -m streamlit run app/streamlit_app.py
 ```
 
+看板默认使用简体中文，可在侧边栏的“界面语言”中切换为 English。语言切换覆盖入口、五个业务页面、图表、指标卡与展示表格；配变编号、馈线编号、文件路径、命令、单位和 SHA-256 等技术标识保持原样。翻译只作用于展示副本，不修改运行产物、算法字段或证据哈希。
+
 三个可从头执行的教学 Notebook：notebooks/01_network_sanity.ipynb（网络健全性）、notebooks/02_baseline_analysis.ipynb（基线对比）、notebooks/03_robustness_analysis.ipynb（鲁棒性聚合）。
 
 ## 质量与复现
@@ -187,7 +189,7 @@ auditOut=$(mktemp -d)
 ```text
 configs/          # 默认与鲁棒性实验配置
 src/ltverify/     # 网络、曲线、潮流、扰动、特征、评分、评价、流水线与 CLI
-app/              # Streamlit 中文多页看板
+app/              # Streamlit 中英文多页看板（默认简体中文）
 notebooks/        # 网络健全性、基线对比、鲁棒性聚合三个可执行 Notebook
 tests/            # 单元、集成与防泄漏测试
 scripts/          # Windows 一键运行脚本
