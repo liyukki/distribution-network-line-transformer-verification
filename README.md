@@ -51,8 +51,16 @@ python3 -m venv .venv
 
 小规模冒烟运行（3 馈线 × 3 配变、1 天、6 小时间隔）：
 
+Windows:
+
 ```text
-python -m ltverify run-all --config tests/fixtures/small_config.yaml
+.venv/Scripts/python.exe -m ltverify run-all --config tests/fixtures/small_config.yaml
+```
+
+Linux/macOS:
+
+```bash
+.venv/bin/python -m ltverify run-all --config tests/fixtures/small_config.yaml
 ```
 
 默认 30 天完整流水线：
@@ -61,10 +69,10 @@ python -m ltverify run-all --config tests/fixtures/small_config.yaml
 scripts/run_pipeline.ps1
 ```
 
-或等价命令：
+或等价命令（Windows）：
 
 ```text
-python -m ltverify run-all --config configs/default.yaml
+.venv/Scripts/python.exe -m ltverify run-all --config configs/default.yaml
 ```
 
 启动看板（需要一个已完成运行的目录）：
@@ -75,8 +83,16 @@ scripts/run_dashboard.ps1 -RunDir <运行目录>
 
 或：
 
+Windows:
+
 ```text
-streamlit run app/streamlit_app.py
+.venv/Scripts/python.exe -m streamlit run app/streamlit_app.py
+```
+
+Linux/macOS:
+
+```bash
+.venv/bin/python -m streamlit run app/streamlit_app.py
 ```
 
 三个可从头执行的教学 Notebook：notebooks/01_network_sanity.ipynb（网络健全性）、notebooks/02_baseline_analysis.ipynb（基线对比）、notebooks/03_robustness_analysis.ipynb（鲁棒性聚合）。
@@ -93,13 +109,40 @@ streamlit run app/streamlit_app.py
 
 GitHub Actions 已配置 `.github/workflows/ci.yml`，在 push/PR 时对 Python 3.11 与 3.12 运行格式检查、静态检查、测试与 wheel 构建。
 
-证据复现命令：
+公开证据包复现（写入系统临时目录，不覆盖仓库权威文件）：
 
-```text
-python -m ltverify report --run-dir <运行目录> --output reports/metrics/default_summary.json
+```powershell
+$auditOut = Join-Path $env:TEMP "ltverify-public-evidence"
+New-Item -ItemType Directory -Path $auditOut -Force | Out-Null
+.venv/Scripts/python.exe -m ltverify report `
+  --run-dir reports/evidence/default_run `
+  --output (Join-Path $auditOut "default_summary.json") `
+  --manifest-output (Join-Path $auditOut "default_manifest.json")
 ```
 
-更多信任边界与公开审计说明见 `AI_USAGE.md`、`docs/audit-summary.md`、`docs/design.md`。
+Linux/macOS 等价命令：
+
+```bash
+auditOut=$(mktemp -d)
+.venv/bin/python -m ltverify report \
+  --run-dir reports/evidence/default_run \
+  --output "$auditOut/default_summary.json" \
+  --manifest-output "$auditOut/default_manifest.json"
+```
+
+生成结果应与 `reports/metrics/default_summary.json`、`reports/metrics/default_manifest.json` 逐字节一致。
+
+**两种复现语义：**
+- 公开证据复现：验证历史权威 run，并逐字节生成规范报告。
+- 重新运行仿真：从 `configs/default.yaml` 生成新的 run，用于验证算法流程；run_id、时间戳与 manifest commit 会不同。
+
+更多信任边界与公开审计说明：
+- [AI 使用说明](AI_USAGE.md)
+- [公开审计摘要](docs/audit-summary.md)
+- [设计说明](docs/design.md)
+- [方法论](docs/methodology.md)
+- [面试指南](docs/interview-guide.md)
+- [数据字典](data/README.md)
 
 ## 实验设计
 
@@ -107,18 +150,18 @@ python -m ltverify report --run-dir <运行目录> --output reports/metrics/defa
 - 规划中（后续工作）：E1 方法对比中的随机森林对照、E7 泛化，以及按仿真场景/日期块/随机种子分组的 60/20/20 训练/验证/测试划分（分组工具 grouped_scenario_split 已实现，尚未接入生产链路）。
 
 ```text
-python -m ltverify experiments --config configs/robustness.yaml
+.venv/Scripts/python.exe -m ltverify experiments --config configs/robustness.yaml
 ```
 
 主指标为 Precision、Recall、F1、PR-AUC（连续 anomaly_score）、Top-1、Top-2 与自动推荐覆盖率；三馈线场景下 Top-3 不适用（候选数 ≤ 3），不作为性能证据；Accuracy 不作为主结论。
 
 ## 结果
 
-以下数字均可由固定命令复现：python -m ltverify report --run-dir <运行目录> 自动生成 reports/metrics/default_summary.json，可追溯至运行 ID、manifest 与指标文件。
+以下数字均可由固定命令复现：`.venv/Scripts/python.exe -m ltverify report --run-dir <运行目录> --output reports/metrics/default_summary.json` 自动生成 reports/metrics/default_summary.json，可追溯至运行 ID、manifest 与指标文件。
 
 **物理检查说明**：零负荷网络的 base-case 检查只证明拓扑可解（收敛、电压与平衡基线）；逐时刻校验（每时刻收敛、电压范围、变压器负载率、功率平衡）由时序仿真记录并随运行产物输出。
 
-**默认 30 天流水线**（运行 ID 20260816T121851Z-fb16e1，schema-v2 证据由 python -m ltverify report 生成：default_summary.json 与可移植副本 default_manifest.json）：
+**默认 30 天流水线**（运行 ID 20260816T121851Z-fb16e1，schema-v2 证据由 `.venv/Scripts/python.exe -m ltverify report` 生成：default_summary.json 与可移植副本 default_manifest.json）：
 
 - 增强方法：Precision 0.143、Recall 0.200、F1 0.167、PR-AUC 0.378（连续 anomaly_score 全样本口径）、PR-AUC（scored 子集诊断口径）0.378（scored_coverage 1.0）、Top-1 修正率 0.2、Top-2 修正率 0.4、自动推荐覆盖率 0.292；Top-3 在三馈线场景标记为不适用。
 - 基线（仅原始电压相关）：全部不触发告警，F1 0.0。

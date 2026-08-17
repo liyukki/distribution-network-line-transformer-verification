@@ -11,6 +11,8 @@
 - **Current schema**：主看板磁盘入口只接受 current schema-v2 的 completed 运行；旧版、未来版和非法版在加载前拒绝。
 - **Verify-before-parse**：首页在读取任何 CSV/Parquet/metrics 前，先验证 manifest 声明、哈希和普通文件契约。
 - **Dashboard artifact binding**：首页实际读取的每个文件都必须属于 manifest 声明的权威集合；删除声明不能绕过校验。
+- **Cross-artifact semantic binding**：loader 在返回前还会校验 truth/ledger/predictions/metrics/confusion matrix 之间的 ID、计数、coverage 与 precision/recall/F1 一致性。
+- **Public default evidence bundle**：`reports/evidence/default_run/` 包含一份已通过 manifest 校验的合成默认运行，全新 clone 无需访问本机 ignored `runs/` 即可逐字节复现规范报告。
 
 ## 典型修复案例
 
@@ -22,7 +24,7 @@
 ## 最终测试与证据状态
 
 - 全量测试通过，覆盖率保持在 90% 以上。
-- 默认 `default_summary.json` 与 `default_manifest.json` 可由源运行目录逐字节复现。
+- 默认 `default_summary.json` 与 `default_manifest.json` 可由公开证据包或源运行目录逐字节复现。
 - 权威实验清单严格验证返回 `strict`。
 - 鲁棒性加载返回 `strict_verified`。
 - 鲁棒性实验矩阵保持 130 行。

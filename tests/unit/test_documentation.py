@@ -43,6 +43,7 @@ REFERENCED_PATHS = [
     "docs/audit-summary.md",
     "docs/design.md",
     ".github/workflows/ci.yml",
+    "reports/evidence/default_run",
 ]
 
 
@@ -80,3 +81,39 @@ def test_streamlit_minimum_version_declared() -> None:
     assert "streamlit>=1.51,<2" in pyproject
     requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     assert "streamlit>=1.51,<2" in requirements
+
+
+def test_readme_evidence_command_includes_manifest_output() -> None:
+    text = _readme()
+    assert "--manifest-output" in text
+    assert "reports/evidence/default_run" in text
+
+
+def test_readme_uses_markdown_links_for_public_docs() -> None:
+    text = _readme()
+    for target in (
+        "AI_USAGE.md",
+        "docs/audit-summary.md",
+        "docs/design.md",
+        "docs/methodology.md",
+        "docs/interview-guide.md",
+        "data/README.md",
+    ):
+        assert f"]({target})" in text, f"README 缺少 Markdown 链接: {target}"
+
+
+def test_public_docs_and_notebooks_have_no_local_absolute_paths() -> None:
+    files = [
+        ROOT / "README.md",
+        ROOT / "AI_USAGE.md",
+        ROOT / "docs" / "audit-summary.md",
+        ROOT / "docs" / "design.md",
+        ROOT / "docs" / "methodology.md",
+        ROOT / "notebooks" / "01_network_sanity.ipynb",
+        ROOT / "notebooks" / "02_baseline_analysis.ipynb",
+        ROOT / "notebooks" / "03_robustness_analysis.ipynb",
+    ]
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        assert "D:\\" not in text, f"{path} 包含 D:\\ 本机路径"
+        assert "C:\\Users\\" not in text, f"{path} 包含 C:\\Users\\ 本机路径"
