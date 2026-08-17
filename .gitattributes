@@ -6,3 +6,4 @@ reports/metrics/*.json -text
 *.parquet -text
 configs/*.yaml -text
 tests/fixtures/*.yaml -text
+*.pdf binary
