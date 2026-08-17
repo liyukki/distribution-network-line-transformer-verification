@@ -35,6 +35,8 @@ flowchart LR
 
 ## 快速开始
 
+首次使用建议先阅读[完整使用说明](docs/user-guide.md)，其中包含安装、命令行、五个看板页面、产物字段、公开证据复现和故障排查。
+
 Windows:
 
 ```text

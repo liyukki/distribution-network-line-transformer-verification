@@ -72,6 +72,19 @@ def test_user_guide_has_required_sections() -> None:
         assert re.search(rf"^#+\s+.*{re.escape(heading)}", guide, re.MULTILINE), heading
 
 
+def test_user_guide_relative_links_resolve() -> None:
+    guide = _read_required(GUIDE)
+    targets = re.findall(r"\[[^]]+\]\(([^)]+)\)", guide)
+    relative_targets = [
+        target.split("#", 1)[0]
+        for target in targets
+        if target and not target.startswith(("http://", "https://", "mailto:", "#"))
+    ]
+    assert relative_targets
+    for target in relative_targets:
+        assert (GUIDE.parent / target).resolve().exists(), target
+
+
 def test_paper_has_required_sections_and_honest_headline_results() -> None:
     paper = _read_required(PAPER)
     for heading in REQUIRED_PAPER_HEADINGS:
