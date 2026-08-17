@@ -571,6 +571,76 @@ def test_load_run_artifacts_rejects_f1_mismatch_with_confusion_matrix(
         load_run_artifacts(run_dir)
 
 
+def test_load_run_artifacts_rejects_list_valued_decision(tmp_path: Path) -> None:
+    import pandas as pd
+
+    run_dir = _fixture_run(tmp_path)
+    predictions = pd.read_parquet(run_dir / "predictions.parquet")
+    predictions["decision"] = [
+        [str(value)] for value in predictions["decision"]
+    ]
+    predictions.to_parquet(run_dir / "predictions.parquet")
+    _update_manifest_hash(run_dir, "predictions.parquet")
+    with pytest.raises(ArtifactLoadError, match="decision.*非空字符串"):
+        load_run_artifacts(run_dir)
+
+
+def test_load_run_artifacts_rejects_list_valued_transformer_id(
+    tmp_path: Path,
+) -> None:
+    import pandas as pd
+
+    run_dir = _fixture_run(tmp_path)
+    predictions = pd.read_parquet(run_dir / "predictions.parquet")
+    predictions["transformer_id"] = [
+        [str(value)] for value in predictions["transformer_id"]
+    ]
+    predictions.to_parquet(run_dir / "predictions.parquet")
+    _update_manifest_hash(run_dir, "predictions.parquet")
+    with pytest.raises(ArtifactLoadError, match="transformer_id.*非空字符串"):
+        load_run_artifacts(run_dir)
+
+
+@pytest.mark.parametrize(
+    "bad_value",
+    [
+        None,
+        [],
+        {},
+        pytest.param(
+            [str(value) for value in ("T001",)],
+            id="list",
+        ),
+        pytest.param(
+            __import__("numpy").array(["T001"]),
+            id="numpy-array",
+        ),
+        1,
+        True,
+        b"T001",
+        "",
+    ],
+)
+def test_nonempty_string_series_rejects_bad_values(bad_value: object) -> None:
+    import pandas as pd
+
+    from ltverify.data_access import _require_nonempty_string_series
+
+    frame = pd.DataFrame({"col": ["ok", bad_value]})
+    with pytest.raises(ArtifactLoadError, match="非空字符串"):
+        _require_nonempty_string_series(frame, "col", "label")
+
+
+def test_nonempty_string_series_accepts_valid_values() -> None:
+    import pandas as pd
+
+    from ltverify.data_access import _require_nonempty_string_series
+
+    frame = pd.DataFrame({"col": ["T001", "F01", "automatic_recommendation"]})
+    result = _require_nonempty_string_series(frame, "col", "label")
+    assert list(result) == ["T001", "F01", "automatic_recommendation"]
+
+
 def test_load_run_artifacts_rejects_transformer_id_set_mismatch(
     tmp_path: Path,
 ) -> None:

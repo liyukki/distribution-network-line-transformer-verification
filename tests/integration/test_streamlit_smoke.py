@@ -126,6 +126,27 @@ def test_streamlit_rejects_missing_prediction_column(monkeypatch) -> None:
     assert len(app_test.error) >= 1
 
 
+def test_streamlit_shows_domain_error_for_list_valued_decision(
+    monkeypatch,
+) -> None:
+    import pandas as pd
+
+    run_dir = run_pipeline(Path("tests/fixtures/small_config.yaml"))
+    predictions = pd.read_parquet(run_dir / "predictions.parquet")
+    predictions["decision"] = [
+        [str(value)] for value in predictions["decision"]
+    ]
+    predictions.to_parquet(run_dir / "predictions.parquet")
+    _update_manifest_hash(run_dir, "predictions.parquet")
+    monkeypatch.setenv("LTVERIFY_RUN_DIR", str(run_dir.resolve()))
+    app_test = AppTest.from_file(ROOT / "app" / "streamlit_app.py", default_timeout=120)
+    app_test.run()
+    assert len(app_test.exception) == 0
+    assert len(app_test.error) >= 1
+    error_text = " ".join(element.value for element in app_test.error)
+    assert "decision" in error_text
+
+
 def test_streamlit_rejects_malformed_metrics_after_hash_update(
     monkeypatch,
 ) -> None:

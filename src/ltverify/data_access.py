@@ -310,6 +310,24 @@ def _validate_metrics(metrics: dict[str, object]) -> None:
         raise ArtifactLoadError("metrics.scored_coverage + insufficient_data_rate 必须等于 1")
 
 
+def _require_nonempty_string_series(
+    frame: pd.DataFrame,
+    column: str,
+    label: str,
+) -> pd.Series:
+    """Tighten one object column to a non-empty-string contract.
+
+    Must run before any hash, set, unique, sort or merge operation on the
+    column: list/dict/array/null/numeric/bool/bytes/empty-string values
+    are rejected with a domain error instead of leaking a raw TypeError.
+    """
+    values = frame[column]
+    valid = values.map(lambda value: isinstance(value, str) and bool(value))
+    if not bool(valid.all()):
+        raise ArtifactLoadError(f"{label}.{column} 必须全部为非空字符串")
+    return values
+
+
 def _validate_transformer_identity_contracts(
     truth: pd.DataFrame,
     ledger: pd.DataFrame,
@@ -320,10 +338,15 @@ def _validate_transformer_identity_contracts(
         ("reported_ledger.csv", ledger),
         ("predictions.parquet", predictions),
     ):
-        if frame["transformer_id"].isna().any():
-            raise ArtifactLoadError(f"{name} 的 transformer_id 含缺失值")
+        _require_nonempty_string_series(frame, "transformer_id", name)
         if frame["transformer_id"].duplicated().any():
             raise ArtifactLoadError(f"{name} 的 transformer_id 存在重复")
+    _require_nonempty_string_series(
+        truth, "physical_feeder_id", "truth_topology.csv"
+    )
+    _require_nonempty_string_series(
+        ledger, "reported_feeder_id", "reported_ledger.csv"
+    )
     ids = [set(frame["transformer_id"]) for frame in (truth, ledger, predictions)]
     if not all(item == ids[0] for item in ids[1:]):
         raise ArtifactLoadError("truth/ledger/predictions 的 transformer_id 集合不一致")
@@ -346,7 +369,10 @@ def _validate_prediction_metric_consistency(
         "insufficient_data",
         "automatic_recommendation",
     }
-    decisions = set(predictions["decision"].unique())
+    decision_values = _require_nonempty_string_series(
+        predictions, "decision", "predictions.parquet"
+    )
+    decisions = set(decision_values)
     if not decisions.issubset(allowed_decisions):
         raise ArtifactLoadError(
             f"predictions.decision 含未知值: {sorted(decisions - allowed_decisions)}"
