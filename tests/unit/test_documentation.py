@@ -89,6 +89,11 @@ def test_readme_evidence_command_includes_manifest_output() -> None:
     assert "reports/evidence/default_run" in text
 
 
+def test_readme_has_no_report_command_without_manifest_output() -> None:
+    text = _readme()
+    assert "--run-dir <运行目录> --output reports/metrics/default_summary.json" not in text
+
+
 def test_readme_uses_markdown_links_for_public_docs() -> None:
     text = _readme()
     for target in (

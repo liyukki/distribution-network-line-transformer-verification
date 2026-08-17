@@ -157,7 +157,7 @@ auditOut=$(mktemp -d)
 
 ## 结果
 
-以下数字均可由固定命令复现：`.venv/Scripts/python.exe -m ltverify report --run-dir <运行目录> --output reports/metrics/default_summary.json` 自动生成 reports/metrics/default_summary.json，可追溯至运行 ID、manifest 与指标文件。
+以下数字可由"质量与复现"章节的公开证据包命令逐字节复现；该命令从 `reports/evidence/default_run/` 读取历史权威 run，并同时生成临时 `default_summary.json` 与 `default_manifest.json`，不会覆盖仓库中的规范证据文件。
 
 **物理检查说明**：零负荷网络的 base-case 检查只证明拓扑可解（收敛、电压与平衡基线）；逐时刻校验（每时刻收敛、电压范围、变压器负载率、功率平衡）由时序仿真记录并随运行产物输出。
 
