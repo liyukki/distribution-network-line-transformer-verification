@@ -1,6 +1,7 @@
 """Dashboard artifact loading with actionable error messages."""
 
 import json
+import math
 from dataclasses import dataclass
 from numbers import Integral, Real
 from pathlib import Path
@@ -114,14 +115,26 @@ def _read_metrics(run_dir: Path) -> dict[str, Any]:
     return metrics
 
 
-def _require_ratio_metric(
-    metrics: dict[str, object],
-    key: str,
-    *,
-    allow_none: bool,
-) -> float | None:
-    value = metrics.get(key)
-    if value is None and allow_none:
+def _require_present(metrics: dict[str, object], key: str) -> None:
+    if key not in metrics:
+        raise ArtifactLoadError(f"metrics 缺少必填字段: {key}")
+
+
+def _require_ratio_metric(metrics: dict[str, object], key: str) -> float:
+    _require_present(metrics, key)
+    value = metrics[key]
+    if isinstance(value, bool) or not isinstance(value, Real):
+        raise ArtifactLoadError(f"metrics.{key} 必须是 [0,1] 内有限数值")
+    numeric = float(value)
+    if not np.isfinite(numeric) or not 0.0 <= numeric <= 1.0:
+        raise ArtifactLoadError(f"metrics.{key} 必须是 [0,1] 内有限数值")
+    return numeric
+
+
+def _require_nullable_ratio_metric(metrics: dict[str, object], key: str) -> float | None:
+    _require_present(metrics, key)
+    value = metrics[key]
+    if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, Real):
         raise ArtifactLoadError(f"metrics.{key} 必须是 [0,1] 内有限数值")
@@ -137,7 +150,8 @@ def _require_count_metric(
     *,
     positive: bool,
 ) -> int:
-    value = metrics.get(key)
+    _require_present(metrics, key)
+    value = metrics[key]
     if isinstance(value, bool) or not isinstance(value, Integral):
         raise ArtifactLoadError(f"metrics.{key} 必须是整数")
     numeric = int(value)
@@ -148,18 +162,236 @@ def _require_count_metric(
     return numeric
 
 
+def _validate_applicability_triple(
+    metrics: dict[str, object],
+    value_key: str,
+    applicable_key: str,
+    reason_key: str,
+) -> None:
+    applicable = metrics.get(applicable_key)
+    if not isinstance(applicable, bool):
+        raise ArtifactLoadError(f"{applicable_key} 必须是 bool")
+    value = metrics.get(value_key)
+    reason = metrics.get(reason_key)
+    if applicable:
+        if value is None:
+            raise ArtifactLoadError(f"{value_key} 在 applicable=True 时不能为 null")
+        _require_nullable_ratio_metric(metrics, value_key)
+        if reason is not None:
+            raise ArtifactLoadError(f"{reason_key} 在 applicable=True 时必须为 null")
+    else:
+        if value is not None:
+            raise ArtifactLoadError(f"{value_key} 在 applicable=False 时必须为 null")
+        if not isinstance(reason, str) or not reason:
+            raise ArtifactLoadError(f"{reason_key} 在 applicable=False 时必须为非空字符串")
+
+
 def _validate_metrics(metrics: dict[str, object]) -> None:
+    for key in (
+        "precision",
+        "recall",
+        "f1",
+        "automatic_coverage",
+        "insufficient_data_rate",
+        "scored_coverage",
+    ):
+        _require_ratio_metric(metrics, key)
+    for key in (
+        "pr_auc",
+        "pr_auc_scored",
+        "top1_correction_rate",
+        "top2_correction_rate",
+        "top3_correction_rate",
+        "top1_evaluation_coverage",
+        "top2_evaluation_coverage",
+        "top3_evaluation_coverage",
+    ):
+        _require_nullable_ratio_metric(metrics, key)
+
+    _validate_applicability_triple(
+        metrics, "pr_auc", "pr_auc_applicable", "pr_auc_unavailable_reason"
+    )
+    _validate_applicability_triple(
+        metrics,
+        "pr_auc_scored",
+        "pr_auc_scored_applicable",
+        "pr_auc_scored_unavailable_reason",
+    )
+
+    topk = metrics.get("topk_applicable")
+    if not isinstance(topk, dict) or set(topk) != {"top1", "top2", "top3"}:
+        raise ArtifactLoadError("topk_applicable 必须是包含 top1/top2/top3 的字典")
+    for key in ("top1", "top2", "top3"):
+        if not isinstance(topk[key], bool):
+            raise ArtifactLoadError(f"topk_applicable.{key} 必须是 bool")
+        rate_key = f"{key}_correction_rate"
+        coverage_key = f"{key}_evaluation_coverage"
+        count_key = f"{key}_evaluated_count"
+        rate = _require_nullable_ratio_metric(metrics, rate_key)
+        coverage = _require_nullable_ratio_metric(metrics, coverage_key)
+        count = _require_count_metric(metrics, count_key, positive=False)
+        if not topk[key]:
+            if rate is not None or coverage is not None or count != 0:
+                raise ArtifactLoadError(
+                    f"{key} 不适用时 rate/coverage 必须为 null 且 evaluated_count 为 0"
+                )
+        else:
+            if coverage is None:
+                raise ArtifactLoadError(f"{key} 适用时 evaluation_coverage 不能为 null")
+            if rate is None and count != 0:
+                raise ArtifactLoadError(
+                    f"{key} 适用且 evaluated_count>0 时 correction_rate 不能为 null"
+                )
+
     n_total = _require_count_metric(metrics, "n_total", positive=True)
     n_predicted = _require_count_metric(metrics, "n_predicted", positive=False)
+    n_actual_errors = _require_count_metric(metrics, "n_actual_errors", positive=False)
+    n_actual_correct = _require_count_metric(metrics, "n_actual_correct", positive=False)
     if n_predicted > n_total:
         raise ArtifactLoadError("metrics.n_predicted 不能大于 n_total")
-    _require_ratio_metric(metrics, "f1", allow_none=False)
-    _require_ratio_metric(metrics, "automatic_coverage", allow_none=False)
-    _require_ratio_metric(metrics, "top1_correction_rate", allow_none=True)
-    if "n_actual_errors" in metrics:
-        n_errors = _require_count_metric(metrics, "n_actual_errors", positive=False)
-        if n_errors > n_total:
-            raise ArtifactLoadError("metrics.n_actual_errors 不能大于 n_total")
+    if n_actual_errors > n_total or n_actual_correct > n_total:
+        raise ArtifactLoadError("metrics 计数不能大于 n_total")
+    if n_actual_errors + n_actual_correct != n_total:
+        raise ArtifactLoadError("metrics.n_actual_errors + n_actual_correct 必须等于 n_total")
+
+    for key in ("excluded_candidate_count",):
+        _require_count_metric(metrics, key, positive=False)
+    _require_count_metric(metrics, "candidate_feeder_count", positive=True)
+
+    scored_coverage = _require_ratio_metric(metrics, "scored_coverage")
+    insufficient_data_rate = _require_ratio_metric(metrics, "insufficient_data_rate")
+    if not math.isclose(
+        scored_coverage + insufficient_data_rate,
+        1.0,
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    ):
+        raise ArtifactLoadError("metrics.scored_coverage + insufficient_data_rate 必须等于 1")
+
+
+def _validate_transformer_identity_contracts(
+    truth: pd.DataFrame,
+    ledger: pd.DataFrame,
+    predictions: pd.DataFrame,
+) -> None:
+    for name, frame in (
+        ("truth_topology.csv", truth),
+        ("reported_ledger.csv", ledger),
+        ("predictions.parquet", predictions),
+    ):
+        if frame["transformer_id"].isna().any():
+            raise ArtifactLoadError(f"{name} 的 transformer_id 含缺失值")
+        if frame["transformer_id"].duplicated().any():
+            raise ArtifactLoadError(f"{name} 的 transformer_id 存在重复")
+    ids = [set(frame["transformer_id"]) for frame in (truth, ledger, predictions)]
+    if not all(item == ids[0] for item in ids[1:]):
+        raise ArtifactLoadError("truth/ledger/predictions 的 transformer_id 集合不一致")
+
+
+def _validate_prediction_metric_consistency(
+    predictions: pd.DataFrame,
+    metrics: dict[str, object],
+) -> None:
+    if len(predictions) != int(metrics["n_total"]):
+        raise ArtifactLoadError("predictions 行数与 metrics.n_total 不一致")
+    predicted = predictions["predicted_is_mislinked"]
+    if not pd.api.types.is_bool_dtype(predicted):
+        raise ArtifactLoadError("predictions.predicted_is_mislinked 必须是严格 bool")
+    n_predicted = int(predicted.sum())
+    if n_predicted != int(metrics["n_predicted"]):
+        raise ArtifactLoadError("predictions 的预测数不等于 metrics.n_predicted")
+    allowed_decisions = {
+        "no_change",
+        "insufficient_data",
+        "automatic_recommendation",
+    }
+    decisions = set(predictions["decision"].unique())
+    if not decisions.issubset(allowed_decisions):
+        raise ArtifactLoadError(
+            f"predictions.decision 含未知值: {sorted(decisions - allowed_decisions)}"
+        )
+    auto = predictions["decision"] == "automatic_recommendation"
+    if not predictions.loc[auto, "predicted_is_mislinked"].all():
+        raise ArtifactLoadError("automatic_recommendation 必须对应 predicted_is_mislinked=True")
+    if predictions.loc[~auto, "predicted_is_mislinked"].any():
+        raise ArtifactLoadError("非 automatic_recommendation 必须对应 predicted_is_mislinked=False")
+    n_total = int(metrics["n_total"])
+    auto_rate = float(auto.sum()) / n_total
+    if not math.isclose(
+        auto_rate,
+        float(metrics["automatic_coverage"]),
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    ):
+        raise ArtifactLoadError("automatic_coverage 与 predictions 不一致")
+    insufficient = predictions["decision"] == "insufficient_data"
+    scored = ~insufficient
+    insufficient_rate = float(insufficient.sum()) / n_total
+    scored_rate = float(scored.sum()) / n_total
+    if not math.isclose(
+        insufficient_rate,
+        float(metrics["insufficient_data_rate"]),
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    ):
+        raise ArtifactLoadError("insufficient_data_rate 与 predictions 不一致")
+    if not math.isclose(
+        scored_rate,
+        float(metrics["scored_coverage"]),
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    ):
+        raise ArtifactLoadError("scored_coverage 与 predictions 不一致")
+
+
+def _validate_evaluation_consistency(
+    truth: pd.DataFrame,
+    ledger: pd.DataFrame,
+    confusion_matrix: pd.DataFrame,
+    metrics: dict[str, object],
+) -> None:
+    merged = ledger.merge(
+        truth[["transformer_id", "physical_feeder_id"]],
+        on="transformer_id",
+        how="left",
+        validate="one_to_one",
+    )
+    actual_errors = int((merged["reported_feeder_id"] != merged["physical_feeder_id"]).sum())
+    if actual_errors != int(metrics["n_actual_errors"]):
+        raise ArtifactLoadError("truth/ledger 计算的错误数不等于 metrics.n_actual_errors")
+    try:
+        matrix = confusion_matrix.to_numpy(dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ArtifactLoadError("confusion_matrix.csv 必须是 2×2 数值矩阵") from exc
+    if matrix.shape != (2, 2):
+        raise ArtifactLoadError("confusion_matrix.csv 必须是 2×2 数值矩阵")
+    if not np.isfinite(matrix).all() or (matrix < 0).any():
+        raise ArtifactLoadError("confusion_matrix.csv 必须是非负有限数值")
+    if not np.all(matrix == np.floor(matrix)):
+        raise ArtifactLoadError("confusion_matrix.csv 必须是整数值")
+    matrix_int = matrix.astype(int)
+    if int(matrix_int.sum()) != int(metrics["n_total"]):
+        raise ArtifactLoadError("confusion matrix 总和与 metrics.n_total 不一致")
+    _tn, fp, fn, tp = matrix_int.ravel()
+    if fn + tp != int(metrics["n_actual_errors"]):
+        raise ArtifactLoadError("confusion matrix 实际正例数与 metrics.n_actual_errors 不一致")
+    if fp + tp != int(metrics["n_predicted"]):
+        raise ArtifactLoadError("confusion matrix 预测正例数与 metrics.n_predicted 不一致")
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / (tp + fn) if tp + fn else 0.0
+    f1 = 2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else 0.0
+    for derived, key in (
+        (precision, "precision"),
+        (recall, "recall"),
+        (f1, "f1"),
+    ):
+        if not math.isclose(
+            derived,
+            float(metrics[key]),
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            raise ArtifactLoadError(f"confusion matrix 派生的 {key} 与 metrics 不一致")
 
 
 def _validate_dashboard_contracts(
@@ -212,6 +444,10 @@ def _validate_dashboard_contracts(
         raise ArtifactLoadError("confusion_matrix.csv 必须是 2×2 数值矩阵") from exc
     if matrix.shape != (2, 2) or not np.isfinite(matrix).all():
         raise ArtifactLoadError("confusion_matrix.csv 必须是 2×2 数值矩阵")
+
+    _validate_transformer_identity_contracts(truth, ledger, predictions)
+    _validate_prediction_metric_consistency(predictions, metrics)
+    _validate_evaluation_consistency(truth, ledger, confusion_matrix, metrics)
 
 
 def discover_completed_run_dir(runs_root: Path = Path("runs")) -> str:
