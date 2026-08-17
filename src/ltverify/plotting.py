@@ -5,6 +5,14 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.colors import qualitative
 
+from ltverify.i18n import (
+    DEFAULT_LOCALE,
+    Locale,
+    family_label,
+    metric_label,
+    translate,
+)
+
 FEEDER_COLORS = {"F01": "#1f77b4", "F02": "#ff7f0e", "F03": "#2ca02c"}
 _NEUTRAL_COLOR = "#cccccc"
 
@@ -26,28 +34,41 @@ def feeder_color(feeder_id: object, neutral: bool = False) -> str:
     return palette[index]
 
 
-def confusion_matrix_figure(matrix: np.ndarray) -> go.Figure:
-    """Heatmap with Chinese axes; values are sample counts, never Accuracy."""
+def confusion_matrix_figure(
+    matrix: np.ndarray, *, locale: Locale | str = DEFAULT_LOCALE
+) -> go.Figure:
+    """Localized heatmap whose values are sample counts, never Accuracy."""
     figure = go.Figure(
         go.Heatmap(
             z=matrix,
-            x=["未误判", "误判"],
-            y=["未误判", "误判"],
+            x=[
+                translate(locale, "plot.confusion.negative"),
+                translate(locale, "plot.confusion.positive"),
+            ],
+            y=[
+                translate(locale, "plot.confusion.negative"),
+                translate(locale, "plot.confusion.positive"),
+            ],
             colorscale="Blues",
-            colorbar={"title": "数量"},
+            colorbar={"title": translate(locale, "plot.count")},
             text=matrix,
             texttemplate="%{text}",
         )
     )
     figure.update_layout(
-        title="混淆矩阵",
-        xaxis={"title": "预测标签"},
-        yaxis={"title": "真实标签"},
+        title=translate(locale, "plot.confusion.title"),
+        xaxis={"title": translate(locale, "plot.confusion.predicted")},
+        yaxis={"title": translate(locale, "plot.confusion.actual")},
     )
     return figure
 
 
-def voltage_curves_figure(voltage_wide: pd.DataFrame, transformer_ids: list[str]) -> go.Figure:
+def voltage_curves_figure(
+    voltage_wide: pd.DataFrame,
+    transformer_ids: list[str],
+    *,
+    locale: Locale | str = DEFAULT_LOCALE,
+) -> go.Figure:
     """Overlaid per-transformer voltage curves on a shared time axis."""
     figure = go.Figure()
     for transformer_id in transformer_ids:
@@ -62,14 +83,19 @@ def voltage_curves_figure(voltage_wide: pd.DataFrame, transformer_ids: list[str]
             )
         )
     figure.update_layout(
-        title="配变电压曲线（标幺值）",
-        xaxis={"title": "时间"},
-        yaxis={"title": "电压 (p.u.)"},
+        title=translate(locale, "plot.voltage.title"),
+        xaxis={"title": translate(locale, "plot.time")},
+        yaxis={"title": translate(locale, "plot.voltage")},
     )
     return figure
 
 
-def candidate_score_bars_figure(scores: pd.DataFrame, transformer_id: str) -> go.Figure:
+def candidate_score_bars_figure(
+    scores: pd.DataFrame,
+    transformer_id: str,
+    *,
+    locale: Locale | str = DEFAULT_LOCALE,
+) -> go.Figure:
     """Bar chart of candidate feeder scores for one transformer."""
     figure = go.Figure(
         go.Bar(
@@ -79,14 +105,16 @@ def candidate_score_bars_figure(scores: pd.DataFrame, transformer_id: str) -> go
         )
     )
     figure.update_layout(
-        title=f"{transformer_id} 候选馈线评分",
-        xaxis={"title": "候选馈线"},
-        yaxis={"title": "增强评分", "range": [0, 1]},
+        title=translate(locale, "plot.candidate.title", transformer_id=transformer_id),
+        xaxis={"title": translate(locale, "plot.candidate.feeder")},
+        yaxis={"title": translate(locale, "plot.candidate.score"), "range": [0, 1]},
     )
     return figure
 
 
-def similarity_heatmap_figure(matrix: pd.DataFrame) -> go.Figure:
+def similarity_heatmap_figure(
+    matrix: pd.DataFrame, *, locale: Locale | str = DEFAULT_LOCALE
+) -> go.Figure:
     """Transformer similarity matrix heatmap."""
     figure = go.Figure(
         go.Heatmap(
@@ -95,15 +123,19 @@ def similarity_heatmap_figure(matrix: pd.DataFrame) -> go.Figure:
             y=matrix.index.tolist(),
             colorscale="RdBu_r",
             zmid=0,
-            colorbar={"title": "相关系数"},
+            colorbar={"title": translate(locale, "plot.correlation")},
         )
     )
-    figure.update_layout(title="配变相似度矩阵")
+    figure.update_layout(title=translate(locale, "plot.similarity.title"))
     return figure
 
 
 def topology_figure(
-    nodes: pd.DataFrame, edges: pd.DataFrame, color_edges_by_feeder: bool = True
+    nodes: pd.DataFrame,
+    edges: pd.DataFrame,
+    color_edges_by_feeder: bool = True,
+    *,
+    locale: Locale | str = DEFAULT_LOCALE,
 ) -> go.Figure:
     """Schematic topology on a circle layout, colored by voltage level.
 
@@ -143,34 +175,45 @@ def topology_figure(
                 "size": 10,
                 "color": nodes["voltage_kv"],
                 "colorscale": "Viridis",
-                "colorbar": {"title": "电压等级 (kV)"},
+                "colorbar": {"title": translate(locale, "plot.voltage_level")},
             },
-            name="母线",
+            name=translate(locale, "plot.bus"),
         )
     )
-    figure.update_layout(title="网络拓扑", showlegend=False)
+    figure.update_layout(title=translate(locale, "plot.topology.title"), showlegend=False)
     return figure
 
 
-def pr_curve_figure(precision: list[float], recall: list[float]) -> go.Figure:
+def pr_curve_figure(
+    precision: list[float],
+    recall: list[float],
+    *,
+    locale: Locale | str = DEFAULT_LOCALE,
+) -> go.Figure:
     """Precision-recall curve; the headline is P/R, never Accuracy."""
     figure = go.Figure(
         go.Scatter(
             x=recall,
             y=precision,
             mode="lines+markers",
-            name="PR 曲线",
+            name=translate(locale, "plot.pr.legend"),
         )
     )
     figure.update_layout(
-        title="PR 曲线",
-        xaxis={"title": "Recall"},
-        yaxis={"title": "Precision", "range": [0, 1]},
+        title=translate(locale, "plot.pr.title"),
+        xaxis={"title": translate(locale, "plot.recall")},
+        yaxis={"title": translate(locale, "plot.precision"), "range": [0, 1]},
     )
     return figure
 
 
-def robustness_line_figure(summary: pd.DataFrame, family: str, metric: str) -> go.Figure:
+def robustness_line_figure(
+    summary: pd.DataFrame,
+    family: str,
+    metric: str,
+    *,
+    locale: Locale | str = DEFAULT_LOCALE,
+) -> go.Figure:
     """Mean plus/minus one sample standard deviation across experiment levels.
 
     Requires the aggregate product (robustness_aggregates.csv; legacy
@@ -181,10 +224,7 @@ def robustness_line_figure(summary: pd.DataFrame, family: str, metric: str) -> g
     required = {"family", "value", f"mean_{metric}", f"std_{metric}"}
     missing = sorted(required - set(summary.columns))
     if missing:
-        raise ValueError(
-            f"robustness_line_figure 缺少列: {missing}；"
-            "请传入实验聚合产物 robustness_aggregates.csv（而非原始案例表 robustness_summary.csv）"
-        )
+        raise ValueError(translate(locale, "plot.aggregate_missing", missing=missing))
     rows = summary[summary["family"] == family]
     numeric = pd.to_numeric(rows["value"].astype(str), errors="coerce")
     if numeric.notna().all():
@@ -192,18 +232,25 @@ def robustness_line_figure(summary: pd.DataFrame, family: str, metric: str) -> g
     values = rows["value"].astype(str)
     means = rows[f"mean_{metric}"].to_numpy(dtype=float)
     stds = rows[f"std_{metric}"].to_numpy(dtype=float)
+    localized_family = family_label(locale, family)
+    localized_metric = metric_label(locale, metric)
     figure = go.Figure(
         go.Scatter(
             x=values,
             y=means,
             mode="lines+markers",
-            name=metric,
+            name=localized_metric,
             error_y={"type": "data", "array": stds, "visible": True},
         )
     )
     figure.update_layout(
-        title=f"{family} — {metric}（均值 ± 样本标准差）",
-        xaxis={"title": family},
-        yaxis={"title": metric},
+        title=translate(
+            locale,
+            "plot.robustness.title",
+            family=localized_family,
+            metric=localized_metric,
+        ),
+        xaxis={"title": localized_family},
+        yaxis={"title": localized_metric},
     )
     return figure

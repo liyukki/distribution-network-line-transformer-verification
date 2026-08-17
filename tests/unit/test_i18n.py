@@ -71,7 +71,7 @@ def test_labels_cover_metrics_families_and_dynamic_columns() -> None:
     assert metric_label("zh-CN", "pr_auc_scored") == "可评分子集 PR-AUC"
     assert metric_label("en-US", "top1_correction_rate") == "Top-1 correction rate"
     assert family_label("zh-CN", "missing_rate") == "数据缺失率"
-    assert family_label("en-US", "missing_rate") == "Missing-data rate"
+    assert family_label("en-US", "missing_rate") == "Missing rate"
     assert column_label("zh-CN", "transformer_id") == "配变编号"
     assert column_label("en-US", "mean_f1") == "F1 mean"
     assert column_label("zh-CN", "std_pr_auc") == "PR-AUC 样本标准差"

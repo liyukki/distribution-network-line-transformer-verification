@@ -20,12 +20,23 @@ def test_confusion_matrix_figure_has_chinese_axes() -> None:
     assert len(figure.data) == 1
 
 
+def test_confusion_matrix_figure_supports_english() -> None:
+    figure = confusion_matrix_figure(np.array([[8, 1], [2, 5]]), locale="en-US")
+    assert figure.layout.title.text == "Confusion matrix"
+    assert figure.layout.xaxis.title.text == "Predicted label"
+    assert figure.layout.yaxis.title.text == "True label"
+
+
 def test_voltage_curves_figure() -> None:
     index = pd.date_range("2026-01-01", periods=12, freq="15min")
     wide = pd.DataFrame({"T001": [1.0] * 12, "T002": [0.99] * 12}, index=index)
     figure = voltage_curves_figure(wide, ["T001", "T002"])
     assert len(figure.data) == 2
     assert "p.u." in figure.layout.yaxis.title.text
+
+    english = voltage_curves_figure(wide, ["T001"], locale="en-US")
+    assert english.layout.title.text == "Transformer voltage curves (p.u.)"
+    assert english.layout.xaxis.title.text == "Time"
 
 
 def test_candidate_score_bars_figure() -> None:
@@ -39,6 +50,10 @@ def test_candidate_score_bars_figure() -> None:
     assert len(figure.data) == 1
     assert "T001" in figure.layout.title.text
 
+    english = candidate_score_bars_figure(scores, "T001", locale="en-US")
+    assert english.layout.title.text == "T001 candidate feeder scores"
+    assert english.layout.xaxis.title.text == "Candidate feeder"
+
 
 def test_similarity_heatmap_figure() -> None:
     matrix = pd.DataFrame(
@@ -47,6 +62,10 @@ def test_similarity_heatmap_figure() -> None:
     figure = similarity_heatmap_figure(matrix)
     assert len(figure.data) == 1
     assert "相似度" in figure.layout.title.text
+
+    english = similarity_heatmap_figure(matrix, locale="en-US")
+    assert english.layout.title.text == "Transformer similarity matrix"
+    assert english.data[0].colorbar.title.text == "Correlation"
 
 
 def test_topology_figure() -> None:
@@ -65,11 +84,19 @@ def test_topology_figure() -> None:
     assert len(figure.data) >= 2
     assert "拓扑" in figure.layout.title.text
 
+    english = topology_figure(nodes, edges, locale="en-US")
+    assert english.layout.title.text == "Network topology"
+    assert english.data[-1].marker.colorbar.title.text == "Voltage level (kV)"
+
 
 def test_pr_curve_figure() -> None:
     figure = pr_curve_figure([1.0, 0.8, 0.5], [0.2, 0.6, 1.0])
     assert len(figure.data) == 1
     assert "PR" in figure.layout.title.text
+
+    english = pr_curve_figure([1.0, 0.8], [0.2, 1.0], locale="en-US")
+    assert english.layout.title.text == "PR curve"
+    assert english.data[0].name == "PR curve"
 
 
 def test_robustness_line_figure() -> None:
@@ -83,7 +110,12 @@ def test_robustness_line_figure() -> None:
     )
     figure = robustness_line_figure(summary, "missing_rate", "f1")
     assert len(figure.data) >= 1
-    assert "missing_rate" in figure.layout.title.text
+    assert "缺失率" in figure.layout.title.text
+
+    english = robustness_line_figure(summary, "missing_rate", "f1", locale="en-US")
+    assert english.layout.title.text == "Missing rate — F1 (mean ± sample standard deviation)"
+    assert english.layout.xaxis.title.text == "Missing rate"
+    assert english.layout.yaxis.title.text == "F1"
 
 
 def test_robustness_line_figure_validates_aggregate_columns() -> None:
