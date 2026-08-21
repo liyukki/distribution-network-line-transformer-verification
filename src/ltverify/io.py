@@ -51,6 +51,7 @@ def write_json_atomic(payload: Any, path: Path) -> Path:
     tmp.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False),
         encoding="utf-8",
+        newline="\n",
     )
     tmp.replace(target)
     return target

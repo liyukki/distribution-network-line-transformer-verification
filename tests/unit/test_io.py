@@ -26,3 +26,11 @@ def test_csv_and_json_roundtrip(tmp_path) -> None:
     payload = {"key": "中文值"}
     write_json_atomic(payload, tmp_path / "m.json")
     assert read_json(tmp_path / "m.json") == payload
+
+
+def test_json_writer_uses_platform_independent_lf_newlines(tmp_path) -> None:
+    target = tmp_path / "portable.json"
+    write_json_atomic({"first": 1, "second": 2}, target)
+    raw = target.read_bytes()
+    assert b"\n" in raw
+    assert b"\r\n" not in raw
