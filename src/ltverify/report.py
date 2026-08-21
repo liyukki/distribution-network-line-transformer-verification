@@ -35,6 +35,11 @@ _BASELINE_WEIGHTS = ScoreWeights(
 )
 
 
+def _stable_float(value: float, decimal_places: int = 15) -> float:
+    """Normalize insignificant cross-platform floating-point roundoff."""
+    return round(float(value), decimal_places)
+
+
 def _residual_correlation_means(run_dir: Path) -> dict[str, float]:
     observed = pd.read_parquet(run_dir / "observed_measurements.parquet")
     truth = pd.read_csv(run_dir / "truth_topology.csv")
@@ -60,8 +65,8 @@ def _residual_correlation_means(run_dir: Path) -> dict[str, float]:
             else:
                 cross.append(correlation)
     return {
-        "same_feeder_residual_corr_mean": float(np.nanmean(same)),
-        "cross_feeder_residual_corr_mean": float(np.nanmean(cross)),
+        "same_feeder_residual_corr_mean": _stable_float(np.nanmean(same)),
+        "cross_feeder_residual_corr_mean": _stable_float(np.nanmean(cross)),
         "same_feeder_pair_count": len(same),
         "cross_feeder_pair_count": len(cross),
     }
