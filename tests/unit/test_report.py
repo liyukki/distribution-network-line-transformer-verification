@@ -4,7 +4,14 @@ from pathlib import Path
 import pytest
 
 from ltverify.pipeline import run_pipeline
-from ltverify.report import generate_default_summary
+from ltverify.report import _stable_float, generate_default_summary
+
+
+def test_stable_float_removes_platform_level_roundoff() -> None:
+    windows_value = -0.06369757055785014
+    linux_value = -0.06369757055785016
+
+    assert _stable_float(windows_value) == _stable_float(linux_value)
 
 
 def _fixture_run(tmp_path: Path) -> Path:

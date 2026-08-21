@@ -67,8 +67,8 @@
     "top2_correction_rate": 0.4
   },
   "failure_boundary": {
-    "same_feeder_residual_corr_mean": -0.06369757055785014,
-    "cross_feeder_residual_corr_mean": 0.008748460335166117,
+    "same_feeder_residual_corr_mean": -0.06369757055785,
+    "cross_feeder_residual_corr_mean": 0.008748460335166,
     "same_feeder_pair_count": 84,
     "cross_feeder_pair_count": 192
   },

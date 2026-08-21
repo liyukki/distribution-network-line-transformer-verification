@@ -1,3 +1,5 @@
+import subprocess
+from hashlib import sha256
 from pathlib import Path
 
 from ltverify.io import read_json
@@ -6,6 +8,20 @@ from ltverify.report import generate_default_summary
 
 ROOT = Path(__file__).resolve().parents[2]
 BUNDLE = ROOT / "reports" / "evidence" / "default_run"
+
+
+def test_public_evidence_hashes_match_indexed_git_blobs() -> None:
+    manifest = read_json(BUNDLE / "manifest.json")
+    expected_hashes = manifest["output_sha256"]
+    for name in manifest["output_paths"]:
+        relative = (BUNDLE / name).relative_to(ROOT).as_posix()
+        indexed = subprocess.run(
+            ["git", "show", f":{relative}"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        ).stdout
+        assert sha256(indexed).hexdigest() == expected_hashes[name], relative
 
 
 def test_public_default_evidence_reproduces_canonical_reports(

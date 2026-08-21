@@ -68,15 +68,15 @@ aggregates_path = st.text_input(
     translate(locale, "robustness.aggregates_path"),
     value=default_aggregates_path,
 )
+summary_path = st.text_input(
+    translate(locale, "robustness.summary_path"),
+    value=default_summary_path,
+)
 if not aggregates_path:
     st.info(translate(locale, "robustness.missing_products"))
     st.stop()
 
 aggregates_file = Path(aggregates_path)
-summary_path = st.text_input(
-    translate(locale, "robustness.summary_path"),
-    value=default_summary_path,
-)
 summary_file = Path(summary_path) if summary_path else None
 
 experiment_config_path, base_config_path = _source_config_paths()
