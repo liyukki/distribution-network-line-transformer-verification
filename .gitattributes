@@ -3,7 +3,7 @@
 # (core.autocrlf must not alter them).
 reports/metrics/*.csv -text
 reports/metrics/*.json -text
-reports/evidence/**/*.yaml -text
+reports/evidence/** binary
 *.parquet -text
 configs/*.yaml -text
 tests/fixtures/*.yaml -text

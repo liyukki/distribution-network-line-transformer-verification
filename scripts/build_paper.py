@@ -16,6 +16,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     BaseDocTemplate,
@@ -38,6 +39,8 @@ FONT_BOLD = "PaperChineseBold"
 
 
 def _register_fonts() -> None:
+    global FONT_REGULAR, FONT_BOLD
+
     candidates = (
         (
             Path("C:/Windows/Fonts/msyh.ttc"),
@@ -55,12 +58,17 @@ def _register_fonts() -> None:
                 pdfmetrics.registerFont(TTFont(FONT_REGULAR, str(regular)))
                 pdfmetrics.registerFont(TTFont(FONT_BOLD, str(bold)))
                 return
-            except Exception as exc:  # noqa: BLE001 - record and try known fallback
+            except Exception as exc:  # noqa: BLE001 - ReportLab varies by font backend
                 last_error = exc
-    raise RuntimeError(
-        "未找到可用于论文 PDF 的中文字体。Windows 需要微软雅黑或黑体；"
-        "其他系统请在 _register_fonts() 中配置可嵌入的中文 TTF 字体。"
-    ) from last_error
+    try:
+        fallback = "STSong-Light"
+        pdfmetrics.registerFont(UnicodeCIDFont(fallback))
+        FONT_REGULAR = fallback
+        FONT_BOLD = fallback
+    except Exception as exc:  # noqa: BLE001 - normalize ReportLab backend failures
+        raise RuntimeError("无法注册操作系统字体或 ReportLab 内置中文字体。") from (
+            last_error or exc
+        )
 
 
 def _citation_order(bibliography: Path) -> dict[str, int]:

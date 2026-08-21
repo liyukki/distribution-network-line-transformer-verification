@@ -220,3 +220,25 @@ def test_build_paper_pdf_has_a4_pages_and_extractable_sections(tmp_path: Path) -
     for expected in ("配电网线变关系智能校验", "摘要", "实验结果", "讨论与局限", "参考文献"):
         assert expected in text
     assert "第 1 页" in text
+
+
+def test_build_paper_pdf_without_operating_system_chinese_fonts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import pdfplumber
+
+    from scripts import build_paper
+
+    original_is_file = Path.is_file
+
+    def hide_installed_fonts(path: Path) -> bool:
+        if path.suffix.lower() in {".ttf", ".ttc"}:
+            return False
+        return original_is_file(path)
+
+    monkeypatch.setattr(Path, "is_file", hide_installed_fonts)
+    output = build_paper.build_pdf(PAPER, tmp_path / "portable-paper.pdf")
+    with pdfplumber.open(output) as document:
+        text = "\n".join(page.extract_text() or "" for page in document.pages)
+    assert "配电网线变关系智能校验" in text
